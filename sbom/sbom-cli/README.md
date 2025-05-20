@@ -1,4 +1,4 @@
-``# sbom
+# sbom
 
 A tool to work with SBOM data from the command line.
 

@@ -67,6 +67,7 @@ pub enum StoreRetrievedError<S: Source> {
     Retrieval(#[from] RetrievalError<DiscoveredAdvisory, S>),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, thiserror::Error)]
 pub enum StoreValidatedError<S: Source> {
     #[error(transparent)]

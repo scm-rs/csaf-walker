@@ -32,6 +32,7 @@ impl<S: Source> RetrievedVisitor<S> for SendVisitor {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, thiserror::Error)]
 pub enum SendValidatedAdvisoryError<S: Source> {
     #[error(transparent)]

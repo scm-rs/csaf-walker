@@ -187,6 +187,7 @@ where
     _marker: PhantomData<S>,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum ValidationProcessError<S: Source> {
     /// Failed, but passing on to visitor
     Proceed(ValidationError<S>),

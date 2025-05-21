@@ -68,6 +68,8 @@ macro_rules! from {
 }
 
 impl Sbom<'_> {
+    attribute!(metadata => |sbom -> Option<Metadata> | sbom.metadata.as_ref().map(Into::into));
+
     attribute!(components => |sbom -> Option<Vec<Component>> | sbom
                 .components
                 .as_ref()
@@ -118,6 +120,21 @@ impl<'a> From<&'a serde_cyclonedx::cyclonedx::v_1_6::CycloneDx> for Sbom<'a> {
     fn from(value: &'a serde_cyclonedx::cyclonedx::v_1_6::CycloneDx) -> Self {
         Self::V1_6(Cow::Borrowed(value))
     }
+}
+
+// metadata
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Metadata<'a> {
+    V1_4(&'a serde_cyclonedx::cyclonedx::v_1_4::Metadata),
+    V1_5(&'a serde_cyclonedx::cyclonedx::v_1_5::Metadata),
+    V1_6(&'a serde_cyclonedx::cyclonedx::v_1_6::Metadata),
+}
+
+from!('a, Metadata,  Metadata<'a>);
+
+impl<'a> Metadata<'a> {
+    attribute!(component => |c -> Option<Component<'a>> | c.component.as_ref().map(Into::into));
 }
 
 // component

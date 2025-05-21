@@ -23,6 +23,14 @@ impl CycloneDxChecks<'_> {
     fn collect_bom_refs(&self) -> HashMap<&str, usize> {
         let mut bom_refs = HashMap::<_, usize>::new();
 
+        if let Some(bom_ref) = self.sbom.metadata().and_then(|metadata| {
+            metadata
+                .component()
+                .and_then(|component| component.bom_ref())
+        }) {
+            *bom_refs.entry(bom_ref).or_default() += 1;
+        }
+
         for component in self.sbom.components().iter().flatten() {
             if let Some(bom_ref) = component.bom_ref() {
                 *bom_refs.entry(bom_ref).or_default() += 1;

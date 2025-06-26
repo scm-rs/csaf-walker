@@ -20,8 +20,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 use url::Url;
-use walker_common::retrieve::RetrievalError;
-use walker_common::utils::url::Urlify;
+use walker_common::{retrieve::RetrievalError, utils::url::Urlify};
 
 pub mod check;
 

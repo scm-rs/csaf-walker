@@ -10,11 +10,11 @@ use std::fmt::Display;
 use std::io::Write;
 use time::macros::format_description;
 
-const BOOTSTRAP_VERSION: &str = "5.3.3";
+const BOOTSTRAP_VERSION: &str = "5.3.7";
 const BOOTSTRAP_CSS_SRI: &str =
-    "sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH";
+    "sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr";
 const BOOTSTRAP_JS_SRI: &str =
-    "sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz";
+    "sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q";
 
 /// Options for rendering reports.
 #[derive(Clone, Debug, Default)]

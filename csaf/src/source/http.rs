@@ -123,7 +123,7 @@ impl Source for HttpSource {
                     if has_slash && s.ends_with('/') {
                         s = &s[1..];
                     }
-                    Url::parse(&format!("{}{s}", base))
+                    Url::parse(&format!("{base}{s}"))
                 };
 
                 let changes = ChangeSource::retrieve(&self.fetcher, &base.clone()).await?;

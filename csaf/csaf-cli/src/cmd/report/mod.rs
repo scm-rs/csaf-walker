@@ -201,7 +201,7 @@ impl Report {
                 errors: errors.len(),
                 total_errors: errors.len(),
                 warnings: warnings.len(),
-                total_warnings: warnings.iter().map(|(_, v)| v.len()).sum(),
+                total_warnings: warnings.values().map(|v| v.len()).sum(),
             },
         )?;
 

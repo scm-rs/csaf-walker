@@ -19,7 +19,7 @@ impl Debug for Hex<'_> {
 impl LowerHex for Hex<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for b in self.0 {
-            write!(f, "{:02x}", b)?;
+            write!(f, "{b:02x}")?;
         }
         Ok(())
     }

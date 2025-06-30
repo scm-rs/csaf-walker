@@ -139,7 +139,7 @@ impl Report {
             Statistics {
                 total,
                 errors: errors.len(),
-                total_errors: errors.iter().map(|(_, v)| v.len()).sum(),
+                total_errors: errors.values().map(|v| v.len()).sum(),
                 warnings: 0,
                 total_warnings: 0,
             },

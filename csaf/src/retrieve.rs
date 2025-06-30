@@ -195,7 +195,11 @@ where
         log::info!(
             "Loaded {} public key{}",
             keys.len(),
-            (keys.len() != 1).then_some("s").unwrap_or_default()
+            if keys.len() != 1 {
+                "s"
+            } else {
+                Default::default()
+            }
         );
         if log::log_enabled!(log::Level::Debug) {
             for key in keys.iter().flat_map(|k| &k.certs) {

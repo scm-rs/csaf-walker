@@ -20,7 +20,7 @@ fn issue_57_inspect() {
 
     let result = result.lock();
 
-    println!("{:#?}", result);
+    println!("{result:#?}");
 
     assert_eq!(result.len(), 0);
 }

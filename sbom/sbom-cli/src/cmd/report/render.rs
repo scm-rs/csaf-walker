@@ -26,7 +26,7 @@ struct HtmlReport<'r>(&'r ReportResult<'r>, &'r RenderOptions);
 
 impl HtmlReport<'_> {
     fn render_errors(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let total = self.0.errors.iter().map(|(_, v)| v.len()).sum();
+        let total = self.0.errors.values().map(|v| v.len()).sum();
         Self::title(f, "Errors", &[self.0.errors.len(), total])?;
 
         if !self.0.errors.is_empty() {

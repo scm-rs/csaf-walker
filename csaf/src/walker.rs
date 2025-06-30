@@ -106,7 +106,7 @@ impl<S: Source, P: Progress> Walker<S, P> {
         log::info!("processing {} distribution URLs", distributions.len());
 
         for distribution in distributions {
-            log::info!("Walking directory URL: {:?}", distribution);
+            log::info!("Walking directory URL: {distribution:?}");
             let index = self
                 .source
                 .load_index(distribution)

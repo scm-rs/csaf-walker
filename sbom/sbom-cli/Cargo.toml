@@ -7,10 +7,10 @@ repository = "https://github.com/ctron/csaf-walker"
 categories = ["command-line-utilities", "data-structures"]
 keywords = ["sbom", "cli"]
 readme = "README.md"
-rust-version = "1.85.0"
 
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 # normal

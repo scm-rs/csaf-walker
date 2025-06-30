@@ -139,7 +139,7 @@ impl Source for FileSource {
 
             for ext in SKIP {
                 if name.ends_with(ext) {
-                    log::debug!("Skipping file: {}", name);
+                    log::debug!("Skipping file: {name}");
                     continue 'entry;
                 }
             }

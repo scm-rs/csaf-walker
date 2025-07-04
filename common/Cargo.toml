@@ -1,7 +1,6 @@
 [package]
 name = "walker-common"
 description = "Common functionality for SBOM and CSAF walker"
-version = "0.13.0"
 authors = ["Jens Reimann <ctron@dentrassi.de>"]
 repository = "https://github.com/ctron/csaf-walker"
 categories = ["data-structures"]
@@ -11,6 +10,7 @@ readme = "../README.md"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+version.workspace = true
 
 [dependencies]
 # normal

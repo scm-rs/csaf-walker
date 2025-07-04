@@ -63,7 +63,6 @@ xattr = { workspace = true }
 [features]
 default = ["bzip2"]
 openpgp = ["sequoia-openpgp"]
-libbz2-rs-sys = ["bzip2?/libbz2-rs-sys"]
 
 # deprecated
 cli = ["clap", "env_logger"]

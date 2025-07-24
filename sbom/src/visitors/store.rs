@@ -31,7 +31,6 @@ pub struct StoreVisitor {
     pub no_timestamps: bool,
 
     /// whether to store additional metadata (like the etag) using extended attributes
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub no_xattrs: bool,
 }
 
@@ -40,7 +39,6 @@ impl StoreVisitor {
         Self {
             base: base.into(),
             no_timestamps: false,
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
             no_xattrs: false,
         }
     }
@@ -50,7 +48,6 @@ impl StoreVisitor {
         self
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub fn no_xattrs(mut self, no_xattrs: bool) -> Self {
         self.no_xattrs = no_xattrs;
         self
@@ -214,7 +211,6 @@ impl StoreVisitor {
                 sha512: &sbom.sha512,
                 signature: &sbom.signature,
                 no_timestamps: self.no_timestamps,
-                #[cfg(any(target_os = "linux", target_os = "macos"))]
                 no_xattrs: self.no_xattrs,
             },
         )

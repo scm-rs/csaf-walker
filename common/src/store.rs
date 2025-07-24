@@ -1,14 +1,10 @@
 use crate::retrieve::{RetrievalMetadata, RetrievedDigest};
 use anyhow::Context;
 use sha2::{Sha256, Sha512};
-use std::path::Path;
-use std::time::SystemTime;
+use std::{path::Path, time::SystemTime};
 use tokio::fs;
 
-#[cfg(target_os = "macos")]
 pub const ATTR_ETAG: &str = "etag";
-#[cfg(target_os = "linux")]
-pub const ATTR_ETAG: &str = "user.etag";
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -37,7 +33,6 @@ pub struct Document<'a> {
     pub metadata: &'a RetrievalMetadata,
 
     pub no_timestamps: bool,
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub no_xattrs: bool,
 }
 
@@ -97,10 +92,9 @@ pub async fn store_document(file: &Path, document: Document<'_>) -> Result<(), S
             .map_err(StoreError::Io)?;
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     if !document.no_xattrs {
         if let Some(etag) = &document.metadata.etag {
-            xattr::set(file, ATTR_ETAG, etag.as_bytes())
+            fsquirrel::set(file, ATTR_ETAG, etag.as_bytes())
                 .with_context(|| format!("Failed to store {}: {}", ATTR_ETAG, file.display()))
                 .map_err(StoreError::Io)?;
         }

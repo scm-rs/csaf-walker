@@ -21,6 +21,7 @@ chrono = { workspace = true, features = ["serde"] }
 csv = { workspace = true }
 digest = { workspace = true }
 fluent-uri = { workspace = true }
+fsquirrel = { workspace = true }
 futures = { workspace = true }
 hickory-resolver = { workspace = true, features = ["tokio"] }
 html-escape = { workspace = true }
@@ -66,10 +67,6 @@ csaf-validator-lib = [
 
 # enable for semver checks (in addition to default)
 _semver = ["csaf-validator-lib"]
-
-# workaround until xattr fixes its win32 compilation issues.
-[target.'cfg(any(unix, macos))'.dependencies]
-xattr = { workspace = true }
 
 [package.metadata.cargo-all-features]
 always_include_features = [

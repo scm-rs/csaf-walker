@@ -27,6 +27,7 @@ digest = { workspace = true }
 filetime = { workspace = true }
 flexible-time = { workspace = true }
 fluent-uri = { workspace = true }
+fsquirrel = { workspace = true }
 futures-util = { workspace = true }
 html-escape = { workspace = true }
 humantime = { workspace = true }
@@ -55,10 +56,6 @@ env_logger = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 liblzma = { workspace = true, optional = true }
 sequoia-openpgp = { workspace = true, optional = true }
-
-# workaround until xattr fixes its win32 compilation issues.
-[target.'cfg(any(unix, macos))'.dependencies]
-xattr = { workspace = true }
 
 [features]
 default = ["bzip2"]

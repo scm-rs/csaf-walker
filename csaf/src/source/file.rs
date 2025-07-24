@@ -252,13 +252,10 @@ impl Source for FileSource {
             .and_then(|md| md.modified().ok())
             .map(OffsetDateTime::from);
 
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let etag = xattr::get(&path, walker_common::store::ATTR_ETAG)
+        let etag = fsquirrel::get(&path, walker_common::store::ATTR_ETAG)
             .transpose()
             .and_then(|r| r.ok())
             .and_then(|s| String::from_utf8(s).ok());
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        let etag = None;
 
         Ok(RetrievedAdvisory {
             discovered,

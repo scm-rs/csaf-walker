@@ -52,7 +52,6 @@ impl From<FilterArguments> for FilterConfig {
 #[command(next_help_heading = "Storage")]
 pub struct StoreArguments {
     /// Disable the use of extended attributes, e.g. for etag information.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[arg(long)]
     pub no_xattrs: bool,
 
@@ -76,7 +75,6 @@ impl TryFrom<StoreArguments> for StoreVisitor {
 
         let result = Self::new(base).no_timestamps(value.no_timestamps);
 
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let result = result.no_xattrs(value.no_xattrs);
 
         Ok(result)

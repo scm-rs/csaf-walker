@@ -50,6 +50,8 @@ impl SpdxChecks<'_> {
     fn rel_targets(&self) {
         log::debug!("Checking valid relationship targets");
 
+        // packages
+
         let mut ids = self
             .spdx
             .package_information
@@ -57,7 +59,20 @@ impl SpdxChecks<'_> {
             .map(|p| p.package_spdx_identifier.as_str())
             .collect::<HashSet<_>>();
 
+        // files
+
+        ids.extend(
+            self.spdx
+                .file_information
+                .iter()
+                .map(|f| f.file_spdx_identifier.as_str()),
+        );
+
+        // document itself
+
         ids.insert(&self.spdx.document_creation_information.spdx_identifier);
+
+        // external references
 
         let doc_refs = self
             .spdx

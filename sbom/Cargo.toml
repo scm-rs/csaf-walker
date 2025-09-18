@@ -2,7 +2,7 @@
 name = "sbom-walker"
 description = "A library to work with SBOM data"
 authors = ["Jens Reimann <ctron@dentrassi.de>"]
-repository = "https://github.com/ctron/csaf-walker"
+repository = "https://github.com/scm-rs/csaf-walker"
 categories = ["data-structures"]
 keywords = ["csaf"]
 readme = "../README.md"

@@ -2,7 +2,7 @@
 name = "sbom-cli"
 description = "A CLI to work with SBOM data"
 authors = ["Jens Reimann <ctron@dentrassi.de>"]
-repository = "https://github.com/ctron/csaf-walker"
+repository = "https://github.com/scm-rs/csaf-walker"
 categories = ["command-line-utilities", "data-structures"]
 keywords = ["sbom", "cli"]
 readme = "README.md"

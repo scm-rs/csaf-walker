@@ -2,7 +2,7 @@
 name = "walker-common"
 description = "Common functionality for SBOM and CSAF walker"
 authors = ["Jens Reimann <ctron@dentrassi.de>"]
-repository = "https://github.com/ctron/csaf-walker"
+repository = "https://github.com/scm-rs/csaf-walker"
 categories = ["data-structures"]
 keywords = ["csaf"]
 readme = "../README.md"

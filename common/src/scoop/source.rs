@@ -1,10 +1,5 @@
 use crate::USER_AGENT;
 use anyhow::bail;
-use aws_config::{BehaviorVersion, Region, meta::region::RegionProviderChain};
-use aws_sdk_s3::{
-    Client,
-    config::{AppName, Credentials},
-};
 use bytes::Bytes;
 use std::{
     borrow::Cow,
@@ -12,10 +7,20 @@ use std::{
 };
 use url::Url;
 
+#[cfg(feature = "s3")]
+use aws_config::{BehaviorVersion, Region, meta::region::RegionProviderChain};
+#[cfg(feature = "s3")]
+use aws_sdk_s3::{
+    Client,
+    config::{AppName, Credentials},
+};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Source {
     Path(PathBuf),
     Http(Url),
+    #[cfg(feature = "s3")]
     S3(S3),
 }
 
@@ -23,15 +28,20 @@ impl TryFrom<&str> for Source {
     type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Ok(
-            if value.starts_with("http://") || value.starts_with("https://") {
-                Self::Http(Url::parse(value)?)
-            } else if value.starts_with("s3://") {
-                Self::S3(S3::try_from(value)?)
-            } else {
-                Self::Path(value.into())
-            },
-        )
+        if value.starts_with("http://") || value.starts_with("https://") {
+            return Ok(Self::Http(Url::parse(value)?));
+        }
+
+        #[cfg(feature = "s3")]
+        if value.starts_with("s3://") {
+            return Ok(Self::S3(S3::try_from(value)?));
+        }
+        #[cfg(not(feature = "s3"))]
+        if value.starts_with("s3://") {
+            bail!("S3 URLs are not supported");
+        }
+
+        Ok(Self::Path(value.into()))
     }
 }
 
@@ -42,6 +52,7 @@ impl Source {
                 .into_iter()
                 .map(Self::Path)
                 .collect()),
+            #[cfg(feature = "s3")]
             Self::S3(s3) if s3.key.is_none() => Ok(Self::discover_s3(s3)
                 .await?
                 .into_iter()
@@ -77,6 +88,7 @@ impl Source {
         }
     }
 
+    #[cfg(feature = "s3")]
     async fn discover_s3(s3: S3) -> anyhow::Result<Vec<S3>> {
         let client = s3.client().await?;
 
@@ -110,6 +122,7 @@ impl Source {
         match self {
             Self::Path(path) => path.to_string_lossy(),
             Self::Http(url) => url.as_str().into(),
+            #[cfg(feature = "s3")]
             Self::S3(s3) => format!(
                 "s3://{}/{}/{}",
                 s3.region,
@@ -131,6 +144,7 @@ impl Source {
                     .bytes()
                     .await?
             }
+            #[cfg(feature = "s3")]
             Self::S3(s3) => {
                 let client = s3.client();
                 client
@@ -163,6 +177,7 @@ impl Source {
                     .send()
                     .await?;
             }
+            #[cfg(feature = "s3")]
             Self::S3(s3) => {
                 // delete the object from the bucket
                 let client = s3.client();
@@ -194,6 +209,7 @@ impl Source {
                 // no-op, but warn
                 log::warn!("Unable to move HTTP source ({url}), skipping!");
             }
+            #[cfg(feature = "s3")]
             Self::S3(s3) => {
                 let client = s3.client();
                 client
@@ -211,6 +227,7 @@ impl Source {
     }
 }
 
+#[cfg(feature = "s3")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct S3 {
     region: String,
@@ -219,6 +236,7 @@ pub struct S3 {
     key: Option<String>,
 }
 
+#[cfg(feature = "s3")]
 impl TryFrom<&str> for S3 {
     type Error = anyhow::Error;
 
@@ -257,6 +275,7 @@ impl TryFrom<&str> for S3 {
     }
 }
 
+#[cfg(feature = "s3")]
 impl S3 {
     pub async fn client(&self) -> anyhow::Result<Client> {
         let region_provider = RegionProviderChain::first_try(Region::new(self.region.clone()));
@@ -280,6 +299,7 @@ impl S3 {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "s3")]
     #[test]
     fn parse_s3() {
         assert_eq!(
@@ -311,6 +331,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "s3")]
     #[test]
     fn parse_s3_custom_region() {
         assert_eq!(

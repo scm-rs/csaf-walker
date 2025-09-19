@@ -34,7 +34,7 @@ openssl = { workspace = true, optional = true }
 
 # internal
 csaf-walker = { workspace = true, features = ["csaf"] }
-walker-common = { workspace = true, features = ["openpgp", "clap", "env_logger"] }
+walker-common = { workspace = true, features = ["openpgp", "clap", "env_logger", "s3"] }
 walker-extras = { workspace = true }
 
 [features]

@@ -16,8 +16,6 @@ version.workspace = true
 # normal
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { workspace = true }
-aws-sdk-s3 = { workspace = true }
 backon = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
@@ -49,6 +47,8 @@ url = { workspace = true }
 walkdir = { workspace = true }
 
 # optional
+aws-config = { workspace = true, optional = true }
+aws-sdk-s3 = { workspace = true, optional = true }
 bzip2 = { workspace = true, optional = true }
 bzip2-rs = { workspace = true, optional = true, features = ["rustc_1_51"] }
 clap = { workspace = true, features = ["derive", "env"], optional = true }
@@ -60,6 +60,7 @@ sequoia-openpgp = { workspace = true, optional = true }
 [features]
 default = ["bzip2"]
 openpgp = ["sequoia-openpgp"]
+s3 = ["dep:aws-config", "dep:aws-sdk-s3"]
 
 # deprecated
 cli = ["clap", "env_logger"]

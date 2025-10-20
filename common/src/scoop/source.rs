@@ -1,4 +1,3 @@
-use crate::USER_AGENT;
 use anyhow::bail;
 use bytes::Bytes;
 use std::{
@@ -282,7 +281,7 @@ impl S3 {
 
         let mut shared_config = aws_config::defaults(BehaviorVersion::latest())
             .region(region_provider)
-            .app_name(AppName::new(USER_AGENT)?);
+            .app_name(AppName::new(crate::USER_AGENT)?);
 
         if let Some((key_id, access_key)) = &self.credentials {
             let credentials = Credentials::new(key_id, access_key, None, None, "config");
@@ -297,6 +296,7 @@ impl S3 {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[cfg(feature = "s3")]

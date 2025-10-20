@@ -117,13 +117,13 @@ pub struct Detector<'a> {
 
 impl<'a> Detector<'a> {
     /// Detect and decompress in a single step.
-    pub fn decompress(&'a self, data: Bytes) -> Result<Bytes, Error<'a>> {
+    pub fn decompress(&self, data: Bytes) -> Result<Bytes, Error<'a>> {
         self.decompress_with(data, &Default::default())
     }
 
     /// Detect and decompress in a single step.
     pub fn decompress_with(
-        &'a self,
+        &self,
         data: Bytes,
         opts: &DecompressionOptions,
     ) -> Result<Bytes, Error<'a>> {
@@ -131,7 +131,7 @@ impl<'a> Detector<'a> {
         Ok(compression.decompress_with(data, opts)?)
     }
 
-    pub fn detect(&'a self, #[allow(unused)] data: &[u8]) -> Result<Compression, Error<'a>> {
+    pub fn detect(&self, #[allow(unused)] data: &[u8]) -> Result<Compression, Error<'a>> {
         // detect by file name extension
 
         if let Some(file_name) = self.file_name {
@@ -217,5 +217,14 @@ mod test {
     #[test]
     fn by_name_gzip() {
         assert_eq!(detect("foo.bar.gz"), Compression::Gzip);
+    }
+
+    #[test]
+    fn default() {
+        // we're not interested in running this, just ensuring we can use the Default ergonomically
+        let _result = Detector::default().decompress(Bytes::from_static(b"foo"));
+
+        let detector = Detector::default();
+        let _result = detector.decompress(Bytes::from_static(b"foo"));
     }
 }

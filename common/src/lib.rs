@@ -4,6 +4,7 @@
 pub mod changes;
 pub mod compression;
 pub mod fetcher;
+pub mod http;
 pub mod locale;
 pub mod progress;
 pub mod report;

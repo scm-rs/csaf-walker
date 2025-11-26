@@ -86,6 +86,11 @@ denylist = [
     "_semver",
 ]
 
+[dev-dependencies]
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
+
 [package.metadata.release]
 enable-features = ["sequoia-openpgp/crypto-nettle"]
 tag = true

@@ -4,6 +4,7 @@ mod data;
 use backon::{ExponentialBuilder, Retryable};
 pub use data::*;
 
+use crate::http::get_retry_after_from_response_header;
 use reqwest::{Client, ClientBuilder, IntoUrl, Method, Response};
 use std::fmt::Debug;
 use std::future::Future;
@@ -15,10 +16,12 @@ use url::Url;
 ///
 /// This is some functionality sitting on top an HTTP client, allowing for additional options like
 /// retries.
+/// *default_retry_after* is used when a 429 response does not include a Retry-After header.
 #[derive(Clone, Debug)]
 pub struct Fetcher {
     client: Client,
     retries: usize,
+    default_retry_after: Duration,
 }
 
 /// Error when retrieving
@@ -26,6 +29,8 @@ pub struct Fetcher {
 pub enum Error {
     #[error("Request error: {0}")]
     Request(#[from] reqwest::Error),
+    #[error("Rate limited (HTTP 429), retry after {0:?}")]
+    RateLimited(Duration),
 }
 
 /// Options for the [`Fetcher`]
@@ -34,6 +39,7 @@ pub enum Error {
 pub struct FetcherOptions {
     pub timeout: Duration,
     pub retries: usize,
+    pub default_retry_after: Duration,
 }
 
 impl FetcherOptions {
@@ -53,6 +59,12 @@ impl FetcherOptions {
         self.retries = retries;
         self
     }
+
+    /// Set the default retry-after duration when a 429 response doesn't include a Retry-After header.
+    pub fn default_retry_after(mut self, duration: impl Into<Duration>) -> Self {
+        self.default_retry_after = duration.into();
+        self
+    }
 }
 
 impl Default for FetcherOptions {
@@ -60,6 +72,7 @@ impl Default for FetcherOptions {
         Self {
             timeout: Duration::from_secs(30),
             retries: 5,
+            default_retry_after: Duration::from_secs(10),
         }
     }
 }
@@ -83,6 +96,7 @@ impl Fetcher {
         Self {
             client,
             retries: options.retries,
+            default_retry_after: options.default_retry_after,
         }
     }
 
@@ -122,6 +136,20 @@ impl Fetcher {
             }
         })
         .retry(&backoff.with_max_times(retries))
+        .notify(|err, dur| {
+            // If rate limited, ensure we wait at least the Retry-After duration
+            if let Error::RateLimited(retry_after) = err {
+                if dur < *retry_after {
+                    log::info!(
+                        "Rate limited, extending wait from {:?} to {:?}",
+                        dur,
+                        retry_after
+                    );
+                    let additional = *retry_after - dur;
+                    std::thread::sleep(additional);
+                }
+            }
+        })
         .await
     }
 
@@ -133,6 +161,14 @@ impl Fetcher {
         let response = self.new_request(Method::GET, url).await?.send().await?;
 
         log::debug!("Response Status: {}", response.status());
+
+        // Check for rate limiting
+        if let Some(retry_after) =
+            get_retry_after_from_response_header(&response, self.default_retry_after)
+        {
+            log::warn!("Rate limited (429), retry after: {:?}", retry_after);
+            return Err(Error::RateLimited(retry_after));
+        }
 
         Ok(processor.process(response).await?)
     }

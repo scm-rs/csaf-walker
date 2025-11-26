@@ -10,6 +10,10 @@ pub struct ClientArguments {
     /// Per-request retries count
     #[arg(short, long, default_value = "5")]
     pub retries: usize,
+
+    /// Per-request minimum delay after rate limit (429).
+    #[arg(long, default_value = "10s")]
+    pub default_retry_after: humantime::Duration,
 }
 
 impl From<ClientArguments> for FetcherOptions {
@@ -17,6 +21,7 @@ impl From<ClientArguments> for FetcherOptions {
         FetcherOptions {
             timeout: value.timeout.into(),
             retries: value.retries,
+            default_retry_after: value.default_retry_after.into(),
         }
     }
 }

@@ -2,7 +2,10 @@ use backon::{ExponentialBuilder, Retryable};
 use bytes::Bytes;
 use reqwest::{Body, Method, StatusCode, Url, header};
 use std::time::Duration;
-use walker_common::sender::{self, HttpSender};
+use walker_common::{
+    http::get_retry_after_from_response_header,
+    sender::{self, HttpSender},
+};
 
 #[cfg(feature = "sbom-walker")]
 mod sbom;
@@ -31,6 +34,8 @@ pub enum SendError {
     Server(StatusCode),
     #[error("unexpected status: {0}")]
     UnexpectedStatus(StatusCode),
+    #[error("Rate limited (HTTP 429), retry after {0:?}")]
+    RateLimited(Duration),
 }
 
 /// Send data to a remote sink.
@@ -51,6 +56,9 @@ pub struct SendVisitor {
 
     /// The maximum delay between retries
     pub max_delay: Option<Duration>,
+
+    /// The default retry-after duration when a 429 response doesn't include a Retry-After header
+    pub default_retry_after: Option<Duration>,
 }
 
 impl SendVisitor {
@@ -61,6 +69,7 @@ impl SendVisitor {
             retries: 0,
             min_delay: None,
             max_delay: None,
+            default_retry_after: Some(Duration::from_secs(10)),
         }
     }
 
@@ -76,6 +85,12 @@ impl SendVisitor {
 
     pub fn max_delay(mut self, retry_delay: impl Into<Duration>) -> Self {
         self.max_delay = Some(retry_delay.into());
+        self
+    }
+
+    /// Set the default retry-after duration when a 429 response doesn't include a Retry-After header.
+    pub fn default_retry_after(mut self, duration: impl Into<Duration>) -> Self {
+        self.default_retry_after = Some(duration.into());
         self
     }
 }
@@ -120,6 +135,19 @@ impl SendVisitor {
             .await
             .map_err(|err| SendOnceError::Temporary(err.into()))?;
 
+        if let Some(retry_after) = get_retry_after_from_response_header(
+            &response,
+            self.default_retry_after.unwrap_or(Duration::from_secs(10)),
+        ) {
+            log::warn!(
+                "Rate limited (429) when uploading {name}, retry after: {:?}",
+                retry_after
+            );
+            return Err(SendOnceError::Temporary(SendError::RateLimited(
+                retry_after,
+            )));
+        }
+
         let status = response.status();
 
         if status.is_success() {
@@ -160,7 +188,18 @@ impl SendVisitor {
                 .sleep(tokio::time::sleep)
                 .when(|e| matches!(e, SendOnceError::Temporary(_)))
                 .notify(|err, dur| {
-                    log::info!("retrying {err} after {dur:?}");
+                    // If rate limited, ensure we wait at least the Retry-After duration
+                    if let SendOnceError::Temporary(SendError::RateLimited(retry_after)) = err {
+                        if dur < *retry_after {
+                            log::info!(
+                                "Rate limited, extending wait from {:?} to {:?}",
+                                dur,
+                                retry_after
+                            );
+                            let additional = *retry_after - dur;
+                            std::thread::sleep(additional);
+                        }
+                    }
                 })
                 .await?,
         )

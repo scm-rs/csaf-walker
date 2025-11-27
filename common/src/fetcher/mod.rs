@@ -16,11 +16,11 @@ use url::Url;
 ///
 /// This is some functionality sitting on top an HTTP client, allowing for additional options like
 /// retries.
-/// *default_retry_after* is used when a 429 response does not include a Retry-After header.
 #[derive(Clone, Debug)]
 pub struct Fetcher {
     client: Client,
     retries: usize,
+    /// *default_retry_after* is used when a 429 response does not include a Retry-After header
     default_retry_after: Duration,
 }
 
@@ -166,7 +166,7 @@ impl Fetcher {
         if let Some(retry_after) =
             get_retry_after_from_response_header(&response, self.default_retry_after)
         {
-            log::warn!("Rate limited (429), retry after: {:?}", retry_after);
+            log::info!("Rate limited (429), retry after: {:?}", retry_after);
             return Err(Error::RateLimited(retry_after));
         }
 

@@ -1,4 +1,5 @@
 use reqwest::StatusCode;
+use rstest::rstest;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -59,21 +60,30 @@ async fn test_successful_fetch() {
     assert_eq!(result, "Hello, World!");
 }
 
+#[rstest]
+#[case::with_retry_after_header(Some("1"), 1)]
+#[case::without_retry_after_header(None, 10)]
 #[tokio::test]
-async fn test_rate_limit_with_retry_after() {
+async fn test_rate_limit_retry_after(
+    #[case] retry_after_header: Option<&str>,
+    #[case] expected_min_wait_secs: u64,
+) {
     let attempt_count = Arc::new(AtomicUsize::new(0));
     let attempt_count_clone = attempt_count.clone();
+    let retry_after_header = retry_after_header.map(String::from);
 
     let server = start_mock_server(move |_req| {
         let count = attempt_count_clone.fetch_add(1, Ordering::SeqCst);
 
-        // First request returns 429 with Retry-After
+        // First request returns 429
         if count == 0 {
-            hyper::Response::builder()
-                .status(StatusCode::TOO_MANY_REQUESTS)
-                .header("Retry-After", "1")
-                .body("Rate limited".to_string())
-                .unwrap()
+            let mut builder = hyper::Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
+
+            if let Some(ref header_value) = retry_after_header {
+                builder = builder.header("Retry-After", header_value.as_str());
+            }
+
+            builder.body("Rate limited".to_string()).unwrap()
         } else {
             // Subsequent requests succeed
             hyper::Response::builder()
@@ -95,67 +105,32 @@ async fn test_rate_limit_with_retry_after() {
     assert_eq!(result, "Success after retry");
     assert_eq!(attempt_count.load(Ordering::SeqCst), 2);
 
-    // Should have waited at least 1 second (the Retry-After value)
+    // Should have waited at least the expected duration
     assert!(
-        elapsed >= Duration::from_secs(1),
-        "Expected at least 1s wait, got {:?}",
+        elapsed >= Duration::from_secs(expected_min_wait_secs),
+        "Expected at least {}s wait, got {:?}",
+        expected_min_wait_secs,
         elapsed
     );
 }
 
+#[rstest]
+#[case::succeeds_after_retries(2, 5, true, 3)]
+#[case::exhausts_retries(usize::MAX, 2, false, 3)]
 #[tokio::test]
-async fn test_rate_limit_without_retry_after() {
+async fn test_retry_behavior(
+    #[case] fail_until: usize,
+    #[case] max_retries: usize,
+    #[case] should_succeed: bool,
+    #[case] expected_attempts: usize,
+) {
     let attempt_count = Arc::new(AtomicUsize::new(0));
     let attempt_count_clone = attempt_count.clone();
 
     let server = start_mock_server(move |_req| {
         let count = attempt_count_clone.fetch_add(1, Ordering::SeqCst);
 
-        // First request returns 429 without Retry-After header
-        if count == 0 {
-            hyper::Response::builder()
-                .status(StatusCode::TOO_MANY_REQUESTS)
-                .body("Rate limited".to_string())
-                .unwrap()
-        } else {
-            // Subsequent requests succeed
-            hyper::Response::builder()
-                .status(StatusCode::OK)
-                .body("Success after retry".to_string())
-                .unwrap()
-        }
-    })
-    .await;
-
-    let fetcher = Fetcher::new(FetcherOptions::new().retries(3))
-        .await
-        .unwrap();
-
-    let start = std::time::Instant::now();
-    let result: String = fetcher.fetch(&server).await.unwrap();
-    let elapsed = start.elapsed();
-
-    assert_eq!(result, "Success after retry");
-    assert_eq!(attempt_count.load(Ordering::SeqCst), 2);
-
-    // Should have waited at least 10 seconds (the default when no Retry-After header)
-    assert!(
-        elapsed >= Duration::from_secs(10),
-        "Expected at least 10s wait (default), got {:?}",
-        elapsed
-    );
-}
-
-#[tokio::test]
-async fn test_exponential_backoff() {
-    let attempt_count = Arc::new(AtomicUsize::new(0));
-    let attempt_count_clone = attempt_count.clone();
-
-    let server = start_mock_server(move |_req| {
-        let count = attempt_count_clone.fetch_add(1, Ordering::SeqCst);
-
-        // Fail first 2 attempts with non-429 errors
-        if count < 2 {
+        if count < fail_until {
             hyper::Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body("Server error".to_string())
@@ -169,39 +144,17 @@ async fn test_exponential_backoff() {
     })
     .await;
 
-    let fetcher = Fetcher::new(FetcherOptions::new().retries(5))
-        .await
-        .unwrap();
-
-    let result: String = fetcher.fetch(&server).await.unwrap();
-
-    assert_eq!(result, "Success");
-    assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
-}
-
-#[tokio::test]
-async fn test_retry_exhaustion() {
-    let attempt_count = Arc::new(AtomicUsize::new(0));
-    let attempt_count_clone = attempt_count.clone();
-
-    let server = start_mock_server(move |_req| {
-        attempt_count_clone.fetch_add(1, Ordering::SeqCst);
-        hyper::Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body("Always fails".to_string())
-            .unwrap()
-    })
-    .await;
-
-    let fetcher = Fetcher::new(FetcherOptions::new().retries(2))
+    let fetcher = Fetcher::new(FetcherOptions::new().retries(max_retries))
         .await
         .unwrap();
 
     let result: Result<String, _> = fetcher.fetch(&server).await;
 
-    assert!(result.is_err());
-    // Should attempt initial + 2 retries = 3 total
-    assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
+    assert_eq!(result.is_ok(), should_succeed);
+    if should_succeed {
+        assert_eq!(result.unwrap(), "Success");
+    }
+    assert_eq!(attempt_count.load(Ordering::SeqCst), expected_attempts);
 }
 
 #[tokio::test]
@@ -247,8 +200,11 @@ async fn test_multiple_rate_limits() {
     );
 }
 
+#[rstest]
+#[case::custom_default_2_seconds(2)]
+#[case::custom_default_3_seconds(3)]
 #[tokio::test]
-async fn test_configurable_default_retry_after() {
+async fn test_configurable_default_retry_after(#[case] custom_default_secs: u64) {
     let attempt_count = Arc::new(AtomicUsize::new(0));
     let attempt_count_clone = attempt_count.clone();
 
@@ -270,11 +226,10 @@ async fn test_configurable_default_retry_after() {
     })
     .await;
 
-    // Configure a custom default of 2 seconds
     let fetcher = Fetcher::new(
         FetcherOptions::new()
             .retries(3)
-            .default_retry_after(Duration::from_secs(2)),
+            .default_retry_after(Duration::from_secs(custom_default_secs)),
     )
     .await
     .unwrap();
@@ -286,14 +241,15 @@ async fn test_configurable_default_retry_after() {
     assert_eq!(result, "Success");
     assert_eq!(attempt_count.load(Ordering::SeqCst), 2);
 
-    // Should have waited at least 2 seconds (our custom default)
+    // Should have waited at least the custom default
     assert!(
-        elapsed >= Duration::from_secs(2),
-        "Expected at least 2s wait (custom default), got {:?}",
+        elapsed >= Duration::from_secs(custom_default_secs),
+        "Expected at least {}s wait (custom default), got {:?}",
+        custom_default_secs,
         elapsed
     );
 
-    // Should not have waited 10 seconds (the default)
+    // Should not have waited 10 seconds (the standard default)
     assert!(
         elapsed < Duration::from_secs(10),
         "Expected less than 10s, got {:?}",

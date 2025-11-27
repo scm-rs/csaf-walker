@@ -56,6 +56,7 @@ parking_lot = "0.12"
 pem = "3"
 percent-encoding = "2.3"
 reqwest = "0.12"
+rstest = "0.23"
 sectxtlib = "0.3.1"
 sequoia-openpgp = { version = "2", default-features = false }
 serde = "1"

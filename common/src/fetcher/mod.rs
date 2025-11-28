@@ -4,7 +4,7 @@ mod data;
 use backon::{ExponentialBuilder, Retryable};
 pub use data::*;
 
-use crate::http::get_retry_after_from_response_header;
+use crate::http::calculate_retry_after_from_response_header;
 use reqwest::{Client, ClientBuilder, IntoUrl, Method, Response};
 use std::fmt::Debug;
 use std::future::Future;
@@ -37,9 +37,10 @@ pub enum Error {
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct FetcherOptions {
-    pub timeout: Duration,
-    pub retries: usize,
-    pub default_retry_after: Duration,
+    timeout: Duration,
+    retries: usize,
+    default_retry_after: Duration,
+    max_retry_after: Duration,
 }
 
 impl FetcherOptions {
@@ -61,8 +62,22 @@ impl FetcherOptions {
     }
 
     /// Set the default retry-after duration when a 429 response doesn't include a Retry-After header.
-    pub fn default_retry_after(mut self, duration: impl Into<Duration>) -> Self {
-        self.default_retry_after = duration.into();
+    pub fn retry_after(mut self, duration: Duration) -> Self {
+        if duration > self.max_retry_after {
+            panic!("Default retry-after cannot be greater than max retry-after (300s)");
+        }
+        self.default_retry_after = duration;
+        self
+    }
+
+    /// Set the default retry-after duration when a 429 response doesn't include a Retry-After header
+    /// and checks the duration against the maximum retry-after.
+    pub fn retry_after_with_max(mut self, default: Duration, max: Duration) -> Self {
+        if default > max {
+            panic!("Default retry-after cannot be greater than max retry-after");
+        }
+        self.default_retry_after = default;
+        self.max_retry_after = max;
         self
     }
 }
@@ -73,6 +88,7 @@ impl Default for FetcherOptions {
             timeout: Duration::from_secs(30),
             retries: 5,
             default_retry_after: Duration::from_secs(10),
+            max_retry_after: Duration::from_mins(5),
         }
     }
 }
@@ -124,33 +140,23 @@ impl Fetcher {
         let url = url.into_url()?;
 
         let retries = self.retries;
-        let backoff = ExponentialBuilder::default();
+        let retry = ExponentialBuilder::default().with_max_times(retries);
 
-        (|| async {
-            match self.fetch_once(url.clone(), &processor).await {
-                Ok(result) => Ok(result),
-                Err(err) => {
-                    log::info!("Failed to retrieve: {err}");
-                    Err(err)
+        (|| async { self.fetch_once(url.clone(), &processor).await })
+            .retry(retry)
+            .adjust(|e, dur| {
+                if let Error::RateLimited(retry_after) = e {
+                    if let Some(dur_value) = dur
+                        && dur_value > *retry_after
+                    {
+                        return dur;
+                    }
+                    Some(*retry_after) // only use server-provided delay if it's longer
+                } else {
+                    dur // minimum delay as per backoff strategy
                 }
-            }
-        })
-        .retry(&backoff.with_max_times(retries))
-        .notify(|err, dur| {
-            // If rate limited, ensure we wait at least the Retry-After duration
-            if let Error::RateLimited(retry_after) = err {
-                if dur < *retry_after {
-                    log::info!(
-                        "Rate limited, extending wait from {:?} to {:?}",
-                        dur,
-                        retry_after
-                    );
-                    let additional = *retry_after - dur;
-                    std::thread::sleep(additional);
-                }
-            }
-        })
-        .await
+            })
+            .await
     }
 
     async fn fetch_once<D: DataProcessor>(
@@ -164,7 +170,7 @@ impl Fetcher {
 
         // Check for rate limiting
         if let Some(retry_after) =
-            get_retry_after_from_response_header(&response, self.default_retry_after)
+            calculate_retry_after_from_response_header(&response, self.default_retry_after)
         {
             log::info!("Rate limited (429), retry after: {:?}", retry_after);
             return Err(Error::RateLimited(retry_after));

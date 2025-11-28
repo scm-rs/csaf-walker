@@ -18,11 +18,10 @@ pub struct ClientArguments {
 
 impl From<ClientArguments> for FetcherOptions {
     fn from(value: ClientArguments) -> Self {
-        FetcherOptions {
-            timeout: value.timeout.into(),
-            retries: value.retries,
-            default_retry_after: value.default_retry_after.into(),
-        }
+        FetcherOptions::new()
+            .timeout(value.timeout)
+            .retries(value.retries)
+            .retry_after(value.default_retry_after.into())
     }
 }
 

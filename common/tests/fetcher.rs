@@ -229,7 +229,7 @@ async fn test_configurable_default_retry_after(#[case] custom_default_secs: u64)
     let fetcher = Fetcher::new(
         FetcherOptions::new()
             .retries(3)
-            .default_retry_after(Duration::from_secs(custom_default_secs)),
+            .retry_after(Duration::from_secs(custom_default_secs)),
     )
     .await
     .unwrap();

@@ -107,13 +107,9 @@ impl SendArguments {
         )
         .await?;
 
-        Ok(SendVisitor {
-            url: target,
-            sender,
-            retries,
-            min_delay: Some(min_delay.into()),
-            max_delay: Some(max_delay.into()),
-            default_retry_after: None,
-        })
+        Ok(SendVisitor::new(target, sender)
+            .retries(retries)
+            .min_delay(min_delay)
+            .max_delay(max_delay))
     }
 }

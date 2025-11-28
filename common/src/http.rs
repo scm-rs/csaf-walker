@@ -24,7 +24,7 @@ fn parse_retry_after(value: &str) -> Option<RetryAfter> {
     None
 }
 
-pub fn get_retry_after_from_response_header(
+pub fn calculate_retry_after_from_response_header(
     response: &Response,
     default_duration: Duration,
 ) -> Option<Duration> {

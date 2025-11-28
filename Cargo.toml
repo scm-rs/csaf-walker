@@ -13,7 +13,7 @@ members = [
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.87.0"
-version = "0.15.0"
+version = "0.16.0"
 
 [workspace.dependencies]
 anyhow = "1"
@@ -75,10 +75,10 @@ walkdir = "2.4"
 
 # internal dependencies
 
-csaf-walker = { version = "0.15.0", path = "csaf", default-features = false }
-sbom-walker = { version = "0.15.0", path = "sbom", default-features = false }
-walker-common = { version = "0.15.0", path = "common" }
-walker-extras = { version = "0.15.0", path = "extras" }
+csaf-walker = { version = "0.16.0", path = "csaf", default-features = false }
+sbom-walker = { version = "0.16.0", path = "sbom", default-features = false }
+walker-common = { version = "0.16.0", path = "common" }
+walker-extras = { version = "0.16.0", path = "extras" }
 
 [workspace.metadata.release]
 tag = false

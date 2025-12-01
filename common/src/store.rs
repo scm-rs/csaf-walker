@@ -92,12 +92,12 @@ pub async fn store_document(file: &Path, document: Document<'_>) -> Result<(), S
             .map_err(StoreError::Io)?;
     }
 
-    if !document.no_xattrs {
-        if let Some(etag) = &document.metadata.etag {
-            fsquirrel::set(file, ATTR_ETAG, etag.as_bytes())
-                .with_context(|| format!("Failed to store {}: {}", ATTR_ETAG, file.display()))
-                .map_err(StoreError::Io)?;
-        }
+    if !document.no_xattrs
+        && let Some(etag) = &document.metadata.etag
+    {
+        fsquirrel::set(file, ATTR_ETAG, etag.as_bytes())
+            .with_context(|| format!("Failed to store {}: {}", ATTR_ETAG, file.display()))
+            .map_err(StoreError::Io)?;
     }
 
     Ok(())

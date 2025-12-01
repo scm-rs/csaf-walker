@@ -147,12 +147,11 @@ impl<'a> Detector<'a> {
             if file_name.ends_with(".gz") {
                 return Ok(Compression::Gzip);
             }
-            if self.fail_unknown_file_extension {
-                if let Some((_, ext)) = file_name.rsplit_once('.') {
-                    if !self.ignore_file_extensions.contains(ext) {
-                        return Err(Error::Unsupported(ext));
-                    }
-                }
+            if self.fail_unknown_file_extension
+                && let Some((_, ext)) = file_name.rsplit_once('.')
+                && !self.ignore_file_extensions.contains(ext)
+            {
+                return Err(Error::Unsupported(ext));
             }
         }
 

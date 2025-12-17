@@ -179,7 +179,7 @@ impl Fetcher {
             return Err(Error::RateLimited(retry_after));
         }
         if let Some(status_code) = get_client_error(&response) {
-            log::info!("Client error: {}", status_code);
+            log::debug!("Client error: {status_code}");
             return Err(Error::ClientError(status_code));
         }
 

@@ -54,3 +54,12 @@ pub fn calculate_retry_after_from_response_header(
     }
     None
 }
+
+pub fn get_client_error(response: &Response) -> Option<StatusCode> {
+    let status = response.status();
+    if status.is_client_error() {
+        Some(status)
+    } else {
+        None
+    }
+}

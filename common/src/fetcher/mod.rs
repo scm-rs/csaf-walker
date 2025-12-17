@@ -4,8 +4,8 @@ mod data;
 use backon::{ExponentialBuilder, Retryable};
 pub use data::*;
 
-use crate::http::calculate_retry_after_from_response_header;
-use reqwest::{Client, ClientBuilder, IntoUrl, Method, Response};
+use crate::http::{calculate_retry_after_from_response_header, get_client_error};
+use reqwest::{Client, ClientBuilder, IntoUrl, Method, Response, StatusCode};
 use std::fmt::Debug;
 use std::future::Future;
 use std::marker::PhantomData;
@@ -31,6 +31,8 @@ pub enum Error {
     Request(#[from] reqwest::Error),
     #[error("Rate limited (HTTP 429), retry after {0:?}")]
     RateLimited(Duration),
+    #[error("Client error: {0}")]
+    ClientError(StatusCode),
 }
 
 /// Options for the [`Fetcher`]
@@ -144,6 +146,7 @@ impl Fetcher {
 
         (|| async { self.fetch_once(url.clone(), &processor).await })
             .retry(retry)
+            .when(|e| !matches!(e, Error::ClientError(_)))
             .adjust(|e, dur| {
                 if let Error::RateLimited(retry_after) = e {
                     if let Some(dur_value) = dur
@@ -174,6 +177,10 @@ impl Fetcher {
         {
             log::info!("Rate limited (429), retry after: {:?}", retry_after);
             return Err(Error::RateLimited(retry_after));
+        }
+        if let Some(status_code) = get_client_error(&response) {
+            log::info!("Client error: {}", status_code);
+            return Err(Error::ClientError(status_code));
         }
 
         Ok(processor.process(response).await?)

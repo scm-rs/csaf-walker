@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::net::TcpListener;
-use walker_common::fetcher::{Fetcher, FetcherOptions};
+use walker_common::fetcher::{Error, Fetcher, FetcherOptions};
 
 /// Test helper to start a mock HTTP server
 async fn start_mock_server<F>(handler: F) -> String
@@ -58,6 +58,30 @@ async fn test_successful_fetch() {
     let result: String = fetcher.fetch(&server).await.unwrap();
 
     assert_eq!(result, "Hello, World!");
+}
+
+#[tokio::test]
+async fn test_404_should_not_retry() {
+    let attempt_count = Arc::new(AtomicUsize::new(0));
+    let attempt_count_clone = attempt_count.clone();
+
+    let server = start_mock_server(move |_req| {
+        attempt_count_clone.fetch_add(1, Ordering::SeqCst);
+        let builder = hyper::Response::builder().status(StatusCode::NOT_FOUND);
+        builder.body("Not found".to_string()).unwrap()
+    })
+    .await;
+
+    let fetcher = Fetcher::new(FetcherOptions::new().retries(2))
+        .await
+        .unwrap();
+
+    let result: Result<String, Error> = fetcher.fetch(&server).await;
+    match result {
+        Err(Error::ClientError(code)) => assert_eq!(code, StatusCode::NOT_FOUND),
+        other => panic!("expected ClientError(404), got {other:?}"),
+    }
+    assert_eq!(attempt_count.load(Ordering::SeqCst), 1);
 }
 
 #[rstest]

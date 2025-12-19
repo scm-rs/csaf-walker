@@ -2,12 +2,13 @@ use crate::{
     discover::DiscoveredAdvisory,
     model::{metadata::ProviderMetadata, store::distribution_base},
     retrieve::{RetrievalContext, RetrievedAdvisory, RetrievedVisitor},
-    source::Source,
+    source::{HttpSourceError, Source},
     validation::{ValidatedAdvisory, ValidatedVisitor, ValidationContext, ValidationError},
 };
 use anyhow::Context;
 use sequoia_openpgp::{Cert, armor::Kind, serialize::SerializeInto};
 use std::{
+    any::Any,
     fmt::Debug,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
@@ -15,8 +16,9 @@ use std::{
 };
 use tokio::fs;
 use walker_common::{
+    fetcher,
     retrieve::RetrievalError,
-    store::{Document, StoreError, store_document},
+    store::{Document, ErrorData, StoreError, store_document, store_errors},
     utils::openpgp::PublicKey,
 };
 
@@ -73,7 +75,10 @@ pub enum StoreValidatedError<S: Source> {
     Validation(#[from] ValidationError<S>),
 }
 
-impl<S: Source + Debug> RetrievedVisitor<S> for StoreVisitor {
+impl<S: Source + Debug> RetrievedVisitor<S> for StoreVisitor
+where
+    S::Error: 'static,
+{
     type Error = StoreRetrievedError<S>;
     type Context = Rc<ProviderMetadata>;
 
@@ -93,7 +98,14 @@ impl<S: Source + Debug> RetrievedVisitor<S> for StoreVisitor {
         _context: &Self::Context,
         result: Result<RetrievedAdvisory, RetrievalError<DiscoveredAdvisory, S>>,
     ) -> Result<(), Self::Error> {
-        self.store(&result?).await?;
+        match result {
+            Ok(advisory) => {
+                self.store_advisory(&advisory).await?;
+            }
+            Err(err) => {
+                self.store_error(&err).await?;
+            }
+        }
         Ok(())
     }
 }
@@ -117,7 +129,7 @@ impl<S: Source> ValidatedVisitor<S> for StoreVisitor {
         _context: &Self::Context,
         result: Result<ValidatedAdvisory, ValidationError<S>>,
     ) -> Result<(), Self::Error> {
-        self.store(&result?.retrieved).await?;
+        self.store_advisory(&result?.retrieved).await?;
         Ok(())
     }
 }
@@ -227,7 +239,7 @@ impl StoreVisitor {
         Ok(writer.finalize()?)
     }
 
-    async fn store(&self, advisory: &RetrievedAdvisory) -> Result<(), StoreError> {
+    async fn store_advisory(&self, advisory: &RetrievedAdvisory) -> Result<(), StoreError> {
         log::info!(
             "Storing: {} (modified: {:?})",
             advisory.url,
@@ -260,6 +272,53 @@ impl StoreVisitor {
             },
         )
         .await?;
+
+        Ok(())
+    }
+
+    async fn store_error<S: Source + Debug>(
+        &self,
+        error: &RetrievalError<DiscoveredAdvisory, S>,
+    ) -> Result<(), StoreError>
+    where
+        S::Error: 'static, // Required for Any downcasting
+    {
+        let discovered = error.discovered();
+        log::warn!("Storing retrieval error for: {}: {}", discovered.url, error);
+
+        let relative_url_result = discovered.context.url().make_relative(&discovered.url);
+        let name = match &relative_url_result {
+            Some(name) => name,
+            None => return Err(StoreError::Filename(discovered.url.to_string())),
+        };
+
+        let distribution_base = distribution_base(&self.base, discovered.context.url().as_str());
+        let file = distribution_base.join(name);
+
+        // Get the underlying source error by pattern matching
+        let source_error = match error {
+            RetrievalError::Source { err, .. } => err,
+        };
+
+        // here we can determine if we only store client errors
+        if let Some(http_error) =
+            (source_error as &dyn Any).downcast_ref::<crate::source::HttpSourceError>()
+        {
+            let status_code = match http_error {
+                HttpSourceError::Fetcher(fetcher::Error::ClientError(status)) => Some(status),
+                _ => None,
+            };
+
+            if let Some(code) = status_code {
+                store_errors(
+                    &file,
+                    ErrorData {
+                        data: code.as_str().as_bytes(),
+                    },
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }

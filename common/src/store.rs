@@ -36,6 +36,31 @@ pub struct Document<'a> {
     pub no_xattrs: bool,
 }
 
+pub struct ErrorData<'a> {
+    pub data: &'a [u8],
+}
+
+/// Stores retrieval errors to a file.
+pub async fn store_errors(file: &Path, document: ErrorData<'_>) -> Result<(), StoreError> {
+    log::debug!("Writing errors for {}", file.display());
+
+    if let Some(parent) = file.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("Failed to create parent directory: {}", parent.display()))
+            .map_err(StoreError::Io)?;
+    }
+
+    let file = format!("{}.errors", file.display());
+    fs::write(&file, document.data)
+        .await
+        .with_context(|| format!("Failed to write advisory errors: {file}"))
+        .map_err(StoreError::Io)?;
+
+    Ok(())
+}
+
+/// Stores the document and associated files (checksums, signature, xattrs, timestamps).
 pub async fn store_document(file: &Path, document: Document<'_>) -> Result<(), StoreError> {
     log::debug!("Writing {}", file.display());
 

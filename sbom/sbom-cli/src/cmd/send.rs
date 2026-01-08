@@ -57,6 +57,7 @@ impl Send {
                 .since_file_offset
                 .map(|d| d.into())
                 .unwrap_or_default(),
+            self.skip.allow_missing,
         )?;
 
         log::debug!("Start walking");

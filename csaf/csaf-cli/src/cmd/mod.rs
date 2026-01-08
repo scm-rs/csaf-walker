@@ -95,6 +95,10 @@ pub struct SkipArguments {
     /// A delta to add to the value loaded from the since-state file.
     #[arg(long)]
     pub since_file_offset: Option<humantime::Duration>,
+
+    /// Continue processing even if some documents could not be retrieved.
+    #[arg(long)]
+    pub allow_missing: bool,
 }
 
 #[derive(Debug, clap::Parser)]

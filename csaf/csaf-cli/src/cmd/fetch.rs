@@ -95,6 +95,7 @@ impl Fetch {
                 .since_file_offset
                 .map(|d| d.into())
                 .unwrap_or_default(),
+            self.skip.allow_missing,
         )?;
 
         let show = async |doc| {

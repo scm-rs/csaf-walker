@@ -33,6 +33,10 @@ pub struct StoreArguments {
     /// Output path, defaults to the local directory.
     #[arg(short, long)]
     pub data: Option<PathBuf>,
+
+    /// Continue processing even if some documents could not be retrieved.
+    #[arg(long)]
+    pub allow_missing: bool,
 }
 
 impl TryFrom<StoreArguments> for StoreVisitor {
@@ -62,8 +66,4 @@ pub struct SkipArguments {
     /// A delta to add to the value loaded from the since-state file.
     #[arg(long)]
     pub since_file_offset: Option<humantime::Duration>,
-
-    /// Continue processing even if some documents could not be retrieved.
-    #[arg(long)]
-    pub allow_missing: bool,
 }

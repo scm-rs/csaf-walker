@@ -45,7 +45,6 @@ pub struct Since {
     pub since: Option<SystemTime>,
     pub last_run: SystemTime,
     pub since_file: Option<PathBuf>,
-    pub allow_missing: bool,
 }
 
 impl Deref for Since {
@@ -61,7 +60,6 @@ impl Since {
         since: Option<impl Into<SystemTime>>,
         since_file: Option<PathBuf>,
         since_file_offset: Duration,
-        allow_missing: bool,
     ) -> anyhow::Result<Self> {
         let since = match (since, &since_file) {
             // try file, then fall back to dedicated "since"
@@ -94,7 +92,6 @@ impl Since {
             since,
             last_run,
             since_file,
-            allow_missing,
         })
     }
 

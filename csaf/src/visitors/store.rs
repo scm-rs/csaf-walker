@@ -35,6 +35,9 @@ pub struct StoreVisitor {
 
     /// whether to store additional metadata (like the etag) using extended attributes
     pub no_xattrs: bool,
+
+    /// whether to allow missing files when storing
+    pub allow_missing: bool,
 }
 
 impl StoreVisitor {
@@ -43,6 +46,7 @@ impl StoreVisitor {
             base: base.into(),
             no_timestamps: false,
             no_xattrs: false,
+            allow_missing: false,
         }
     }
 
@@ -53,6 +57,11 @@ impl StoreVisitor {
 
     pub fn no_xattrs(mut self, no_xattrs: bool) -> Self {
         self.no_xattrs = no_xattrs;
+        self
+    }
+
+    pub fn allow_missing(mut self, allow_missing: bool) -> Self {
+        self.allow_missing = allow_missing;
         self
     }
 }
@@ -93,6 +102,8 @@ where
         Ok(Rc::new(context.metadata.clone()))
     }
 
+    /// Stores a retrieved advisory or its retrieval error.
+    /// Fails if storing fails.
     async fn visit_advisory(
         &self,
         _context: &Self::Context,
@@ -101,12 +112,22 @@ where
         match result {
             Ok(advisory) => {
                 self.store_advisory(&advisory).await?;
+                Ok(())
             }
             Err(err) => {
-                self.store_error(&err).await?;
+                match Self::get_client_error_status_code(&err) {
+                    Some(status) => {
+                        if self.allow_missing {
+                            self.store_error(status, err.discovered()).await?;
+                        } else {
+                            return Err(StoreRetrievedError::Retrieval(err));
+                        }
+                    }
+                    None => return Err(StoreRetrievedError::Retrieval(err)),
+                }
+                Ok(())
             }
         }
-        Ok(())
     }
 }
 
@@ -276,15 +297,31 @@ impl StoreVisitor {
         Ok(())
     }
 
-    async fn store_error<S: Source + Debug>(
-        &self,
-        error: &RetrievalError<DiscoveredAdvisory, S>,
-    ) -> Result<(), StoreError>
+    fn get_client_error_status_code<S: Source + Debug>(
+        err: &RetrievalError<DiscoveredAdvisory, S>,
+    ) -> Option<reqwest::StatusCode>
     where
-        S::Error: 'static, // Required for Any downcasting
+        S::Error: 'static,
     {
-        let discovered = error.discovered();
-        log::warn!("Storing retrieval error for: {}: {}", discovered.url, error);
+        // Get the underlying source error by pattern matching
+        let source_error = match err {
+            RetrievalError::Source { err, .. } => err,
+        };
+        if let Some(http_error) =
+            (source_error as &dyn Any).downcast_ref::<crate::source::HttpSourceError>()
+            && let HttpSourceError::Fetcher(fetcher::Error::ClientError(status)) = http_error
+        {
+            return Some(*status);
+        }
+        None
+    }
+
+    async fn store_error(
+        &self,
+        status_code: reqwest::StatusCode,
+        discovered: &DiscoveredAdvisory,
+    ) -> Result<(), StoreError> {
+        log::warn!("Storing retrieval error for: {}", discovered.url);
 
         let relative_url_result = discovered.context.url().make_relative(&discovered.url);
         let name = match &relative_url_result {
@@ -295,31 +332,13 @@ impl StoreVisitor {
         let distribution_base = distribution_base(&self.base, discovered.context.url().as_str());
         let file = distribution_base.join(name);
 
-        // Get the underlying source error by pattern matching
-        let source_error = match error {
-            RetrievalError::Source { err, .. } => err,
-        };
-
-        // here we can determine if we only store client errors
-        if let Some(http_error) =
-            (source_error as &dyn Any).downcast_ref::<crate::source::HttpSourceError>()
-        {
-            let status_code = match http_error {
-                HttpSourceError::Fetcher(fetcher::Error::ClientError(status)) => Some(status),
-                _ => None,
-            };
-
-            if let Some(code) = status_code {
-                store_errors(
-                    &file,
-                    ErrorData {
-                        data: code.as_str().as_bytes(),
-                    },
-                )
-                .await?;
-            }
-        }
-
+        store_errors(
+            &file,
+            ErrorData {
+                data: status_code.as_str().as_bytes(),
+            },
+        )
+        .await?;
         Ok(())
     }
 }

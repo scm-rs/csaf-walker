@@ -62,6 +62,10 @@ pub struct StoreArguments {
     /// Output path, defaults to the local directory.
     #[arg(short, long)]
     pub data: Option<PathBuf>,
+
+    /// Continue processing even if some documents could not be retrieved.
+    #[arg(long)]
+    pub allow_missing: bool,
 }
 
 impl TryFrom<StoreArguments> for StoreVisitor {
@@ -73,7 +77,9 @@ impl TryFrom<StoreArguments> for StoreVisitor {
             None => std::env::current_dir().context("Get current working directory")?,
         };
 
-        let result = Self::new(base).no_timestamps(value.no_timestamps);
+        let result = Self::new(base)
+            .no_timestamps(value.no_timestamps)
+            .allow_missing(value.allow_missing);
 
         let result = result.no_xattrs(value.no_xattrs);
 
@@ -95,10 +101,6 @@ pub struct SkipArguments {
     /// A delta to add to the value loaded from the since-state file.
     #[arg(long)]
     pub since_file_offset: Option<humantime::Duration>,
-
-    /// Continue processing even if some documents could not be retrieved.
-    #[arg(long)]
-    pub allow_missing: bool,
 }
 
 #[derive(Debug, clap::Parser)]

@@ -56,7 +56,6 @@ async fn test_successful_fetch() {
 
     let fetcher = Fetcher::new(FetcherOptions::new()).await.unwrap();
     let result: String = fetcher.fetch(&server).await.unwrap();
-
     assert_eq!(result, "Hello, World!");
 }
 
@@ -82,6 +81,12 @@ async fn test_404_should_not_retry() {
         other => panic!("expected ClientError(404), got {other:?}"),
     }
     assert_eq!(attempt_count.load(Ordering::SeqCst), 1);
+
+    let result = fetcher.fetch::<Option<String>>(&server).await;
+    match result {
+        Err(Error::ClientError(code)) => assert_eq!(code, StatusCode::NOT_FOUND),
+        other => panic!("expected ClientError(404), got {other:?}"),
+    }
 }
 
 #[rstest]

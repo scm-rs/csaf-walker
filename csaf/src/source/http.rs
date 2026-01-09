@@ -178,7 +178,7 @@ impl Source for HttpSource {
         &self,
         discovered: DiscoveredAdvisory,
     ) -> Result<RetrievedAdvisory, Self::Error> {
-        let (signature, sha256, sha512) = try_join!(
+        let digest_result = try_join!(
             async {
                 // If we have a signature source, use it. Otherwise, guess.
                 match discovered.signature.clone() {
@@ -216,8 +216,13 @@ impl Source for HttpSource {
                     }
                 }
             },
-        )?;
+        );
+        if let Err(err) = digest_result {
+            return Err(HttpSourceError::Fetcher(err));
+        }
 
+        // this should never fail as we checked for errors above
+        let (signature, sha256, sha512) = digest_result.expect("Failed to retrieve digests");
         let sha256 = sha256
             // take the first "word" from the line
             .and_then(|expected| expected.split(' ').next().map(ToString::to_string))

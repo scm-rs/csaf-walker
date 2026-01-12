@@ -50,11 +50,10 @@ pub async fn store_errors(file: &Path, document: ErrorData<'_>) -> Result<(), St
             .with_context(|| format!("Failed to create parent directory: {}", parent.display()))
             .map_err(StoreError::Io)?;
     }
-
-    let file = format!("{}.errors", file.display());
-    fs::write(&file, document.data)
+    let error_file = file.with_added_extension("errors");
+    fs::write(&error_file, document.data)
         .await
-        .with_context(|| format!("Failed to write advisory errors: {file}"))
+        .with_context(|| format!("Failed to write advisory errors: {}", error_file.display()))
         .map_err(StoreError::Io)?;
 
     Ok(())

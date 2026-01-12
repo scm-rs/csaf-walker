@@ -217,12 +217,10 @@ impl Source for HttpSource {
                 }
             },
         );
-        if let Err(err) = digest_result {
-            return Err(HttpSourceError::Fetcher(err));
-        }
 
-        // this should never fail as we checked for errors above
-        let (signature, sha256, sha512) = digest_result.expect("Failed to retrieve digests");
+        let (signature, sha256, sha512) = digest_result
+            .map_err(HttpSourceError::Fetcher)?;
+        
         let sha256 = sha256
             // take the first "word" from the line
             .and_then(|expected| expected.split(' ').next().map(ToString::to_string))

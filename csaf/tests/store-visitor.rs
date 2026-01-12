@@ -206,7 +206,8 @@ async fn given_advisory_retrieval_fails_with_client_error_and_allow_missing_is_s
  {
     // Setup temporary directory for storing files
     let temp_dir = TempDir::new().unwrap();
-    let cut: StoreVisitor = StoreVisitor::new(temp_dir.path()).allow_missing(true);
+    let cut: StoreVisitor = StoreVisitor::new(temp_dir.path())
+        .allow_client_errors(vec![reqwest::StatusCode::NOT_FOUND]);
 
     // Create test metadata and context
     let metadata = create_test_metadata();
@@ -242,7 +243,7 @@ async fn given_advisory_retrieval_fails_with_client_error_when_visiting_then_no_
 {
     // Setup temporary directory for storing files
     let temp_dir = TempDir::new().unwrap();
-    let cut: StoreVisitor = StoreVisitor::new(temp_dir.path()).allow_missing(false);
+    let cut: StoreVisitor = StoreVisitor::new(temp_dir.path()).allow_client_errors(vec![]);
 
     // Create test metadata and context
     let metadata = create_test_metadata();

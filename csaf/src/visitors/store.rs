@@ -36,8 +36,8 @@ pub struct StoreVisitor {
     /// whether to store additional metadata (like the etag) using extended attributes
     pub no_xattrs: bool,
 
-    /// whether to allow missing files when storing
-    pub allow_missing: bool,
+    /// the clients errors which can be ignored
+    pub allowed_client_errors: Vec<reqwest::StatusCode>,
 }
 
 impl StoreVisitor {
@@ -46,7 +46,7 @@ impl StoreVisitor {
             base: base.into(),
             no_timestamps: false,
             no_xattrs: false,
-            allow_missing: false,
+            allowed_client_errors: Vec::new(),
         }
     }
 
@@ -60,8 +60,8 @@ impl StoreVisitor {
         self
     }
 
-    pub fn allow_missing(mut self, allow_missing: bool) -> Self {
-        self.allow_missing = allow_missing;
+    pub fn allow_client_errors(mut self, allowed_client_errors: Vec<reqwest::StatusCode>) -> Self {
+        self.allowed_client_errors = allowed_client_errors;
         self
     }
 }
@@ -117,7 +117,9 @@ where
             Err(err) => {
                 match Self::get_client_error_status_code(&err) {
                     Some(status) => {
-                        if self.allow_missing {
+                        if !self.allowed_client_errors.is_empty()
+                            && self.allowed_client_errors.contains(&status)
+                        {
                             self.store_error(status, err.discovered()).await?;
                         } else {
                             return Err(StoreRetrievedError::Retrieval(err));

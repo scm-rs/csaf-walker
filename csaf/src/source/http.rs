@@ -218,9 +218,8 @@ impl Source for HttpSource {
             },
         );
 
-        let (signature, sha256, sha512) = digest_result
-            .map_err(HttpSourceError::Fetcher)?;
-        
+        let (signature, sha256, sha512) = digest_result.map_err(HttpSourceError::Fetcher)?;
+
         let sha256 = sha256
             // take the first "word" from the line
             .and_then(|expected| expected.split(' ').next().map(ToString::to_string))

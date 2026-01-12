@@ -2,6 +2,7 @@ use anyhow::Context;
 use csaf_walker::visitors::{filter::FilterConfig, store::StoreVisitor};
 use flexible_time::timestamp::StartTimestamp;
 use std::path::PathBuf;
+use walker_common::cli::parser::parse_allow_client_errors;
 
 pub mod discover;
 pub mod download;
@@ -63,9 +64,13 @@ pub struct StoreArguments {
     #[arg(short, long)]
     pub data: Option<PathBuf>,
 
-    /// Continue processing even if some documents could not be retrieved.
+    /// Shorthand for `--allow-client-errors 404`.
     #[arg(long)]
     pub allow_missing: bool,
+
+    /// Continue processing even if some documents could not be retrieved.
+    #[arg(long)]
+    pub allow_client_errors: Vec<String>,
 }
 
 impl TryFrom<StoreArguments> for StoreVisitor {
@@ -77,9 +82,12 @@ impl TryFrom<StoreArguments> for StoreVisitor {
             None => std::env::current_dir().context("Get current working directory")?,
         };
 
+        let allow_client_errors: Vec<reqwest::StatusCode> =
+            parse_allow_client_errors(value.allow_missing, value.allow_client_errors)?;
+
         let result = Self::new(base)
             .no_timestamps(value.no_timestamps)
-            .allow_missing(value.allow_missing);
+            .allow_client_errors(allow_client_errors);
 
         let result = result.no_xattrs(value.no_xattrs);
 

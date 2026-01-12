@@ -1,5 +1,6 @@
 //! Command line helpers
 pub mod client;
+pub mod parser;
 pub mod runner;
 
 #[cfg(feature = "openpgp")]

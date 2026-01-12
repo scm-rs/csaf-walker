@@ -33,10 +33,6 @@ pub struct StoreArguments {
     /// Output path, defaults to the local directory.
     #[arg(short, long)]
     pub data: Option<PathBuf>,
-
-    /// Continue processing even if some documents could not be retrieved.
-    #[arg(long)]
-    pub allow_missing: bool,
 }
 
 impl TryFrom<StoreArguments> for StoreVisitor {

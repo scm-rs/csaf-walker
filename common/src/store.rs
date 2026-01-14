@@ -1,5 +1,6 @@
 use crate::retrieve::{RetrievalMetadata, RetrievedDigest};
 use anyhow::Context;
+use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Sha512};
 use std::{path::Path, time::SystemTime};
 use tokio::fs;
@@ -36,12 +37,13 @@ pub struct Document<'a> {
     pub no_xattrs: bool,
 }
 
-pub struct ErrorData<'a> {
-    pub data: &'a [u8],
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorData {
+    pub status_code: u16,
 }
 
 /// Stores retrieval errors to a file.
-pub async fn store_errors(file: &Path, document: ErrorData<'_>) -> Result<(), StoreError> {
+pub async fn store_errors(file: &Path, document: ErrorData) -> Result<(), StoreError> {
     log::debug!("Writing errors for {}", file.display());
 
     if let Some(parent) = file.parent() {
@@ -51,10 +53,16 @@ pub async fn store_errors(file: &Path, document: ErrorData<'_>) -> Result<(), St
             .map_err(StoreError::Io)?;
     }
     let error_file = file.with_added_extension("errors");
-    fs::write(&error_file, document.data)
-        .await
-        .with_context(|| format!("Failed to write advisory errors: {}", error_file.display()))
-        .map_err(StoreError::Io)?;
+
+    fs::write(
+        &error_file,
+        serde_json::to_vec(&document)
+            .context("Failed to encode error information")
+            .map_err(StoreError::Io)?,
+    )
+    .await
+    .with_context(|| format!("Failed to write advisory errors: {}", error_file.display()))
+    .map_err(StoreError::Io)?;
 
     Ok(())
 }

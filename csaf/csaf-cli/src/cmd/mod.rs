@@ -68,7 +68,7 @@ pub struct StoreArguments {
     #[arg(long)]
     pub allow_missing: bool,
 
-    /// Continue processing even if some documents could not be retrieved.
+    /// Continue processing even if some documents could not be retrieved due to 4xx (client) errors.
     #[arg(long)]
     pub allow_client_errors: Vec<String>,
 }
@@ -82,7 +82,7 @@ impl TryFrom<StoreArguments> for StoreVisitor {
             None => std::env::current_dir().context("Get current working directory")?,
         };
 
-        let allow_client_errors: Vec<reqwest::StatusCode> =
+        let allow_client_errors =
             parse_allow_client_errors(value.allow_missing, value.allow_client_errors)?;
 
         let result = Self::new(base)

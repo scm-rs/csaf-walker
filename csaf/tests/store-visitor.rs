@@ -9,7 +9,7 @@ use csaf_walker::{
 use digest::Output;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use sha2::Sha256;
-use std::{rc::Rc, sync::Arc, time::Duration};
+use std::{fs, rc::Rc, sync::Arc, time::Duration};
 use tempfile::TempDir;
 use time::OffsetDateTime;
 use url::Url;
@@ -207,7 +207,7 @@ async fn given_advisory_retrieval_fails_with_client_error_and_allow_missing_is_s
     // Setup temporary directory for storing files
     let temp_dir = TempDir::new().unwrap();
     let cut: StoreVisitor = StoreVisitor::new(temp_dir.path())
-        .allow_client_errors(vec![reqwest::StatusCode::NOT_FOUND]);
+        .allow_client_errors_iter([reqwest::StatusCode::NOT_FOUND]);
 
     // Create test metadata and context
     let metadata = create_test_metadata();
@@ -236,6 +236,26 @@ async fn given_advisory_retrieval_fails_with_client_error_and_allow_missing_is_s
         result.is_ok(),
         "visit_advisory should return ok for client errors"
     );
+
+    // The file path uses URL encoding for the distribution base (same logic as distribution_base function)
+    let distribution_url = "https://example.com/advisories/";
+    let encoded_dir = utf8_percent_encode(distribution_url, NON_ALPHANUMERIC).to_string();
+    let distribution_dir = temp_dir.path().join(encoded_dir);
+
+    assert!(
+        distribution_dir.exists(),
+        "Distribution directory should exist at {:?}",
+        distribution_dir
+    );
+
+    let expected_file = distribution_dir.join("test-advisory-2024-001.json.errors");
+
+    // Assert - ensure the error file was written
+    assert_eq!(
+        fs::read_to_string(expected_file).expect("must be able to read error file"),
+        r#"{"status_code":404}"#,
+        "error file should contain structured JSON information"
+    );
 }
 
 #[tokio::test]
@@ -243,7 +263,7 @@ async fn given_advisory_retrieval_fails_with_client_error_when_visiting_then_no_
 {
     // Setup temporary directory for storing files
     let temp_dir = TempDir::new().unwrap();
-    let cut: StoreVisitor = StoreVisitor::new(temp_dir.path()).allow_client_errors(vec![]);
+    let cut: StoreVisitor = StoreVisitor::new(temp_dir.path()).allow_client_errors_iter([]);
 
     // Create test metadata and context
     let metadata = create_test_metadata();

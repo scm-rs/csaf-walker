@@ -9,6 +9,7 @@ use anyhow::Context;
 use sequoia_openpgp::{Cert, armor::Kind, serialize::SerializeInto};
 use std::{
     any::Any,
+    collections::HashSet,
     fmt::Debug,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
@@ -37,7 +38,7 @@ pub struct StoreVisitor {
     pub no_xattrs: bool,
 
     /// the clients errors which can be ignored
-    pub allowed_client_errors: Vec<reqwest::StatusCode>,
+    pub allowed_client_errors: HashSet<reqwest::StatusCode>,
 }
 
 impl StoreVisitor {
@@ -46,7 +47,7 @@ impl StoreVisitor {
             base: base.into(),
             no_timestamps: false,
             no_xattrs: false,
-            allowed_client_errors: Vec::new(),
+            allowed_client_errors: Default::default(),
         }
     }
 
@@ -60,9 +61,21 @@ impl StoreVisitor {
         self
     }
 
-    pub fn allow_client_errors(mut self, allowed_client_errors: Vec<reqwest::StatusCode>) -> Self {
+    pub fn allow_client_errors(
+        mut self,
+        allowed_client_errors: HashSet<reqwest::StatusCode>,
+    ) -> Self {
         self.allowed_client_errors = allowed_client_errors;
         self
+    }
+
+    /// Similar to [`Self::allow_client_errors`], but accepting any iterable and removing duplicates
+    /// in the process.
+    pub fn allow_client_errors_iter(
+        self,
+        allowed_client_errors: impl IntoIterator<Item = reqwest::StatusCode>,
+    ) -> Self {
+        self.allow_client_errors(allowed_client_errors.into_iter().collect())
     }
 }
 
@@ -116,16 +129,10 @@ where
             }
             Err(err) => {
                 match Self::get_client_error_status_code(&err) {
-                    Some(status) => {
-                        if !self.allowed_client_errors.is_empty()
-                            && self.allowed_client_errors.contains(&status)
-                        {
-                            self.store_error(status, err.discovered()).await?;
-                        } else {
-                            return Err(StoreRetrievedError::Retrieval(err));
-                        }
+                    Some(status) if self.allowed_client_errors.contains(&status) => {
+                        self.store_error(status, err.discovered()).await?;
                     }
-                    None => return Err(StoreRetrievedError::Retrieval(err)),
+                    _ => return Err(StoreRetrievedError::Retrieval(err)),
                 }
                 Ok(())
             }
@@ -309,12 +316,13 @@ impl StoreVisitor {
         let source_error = match err {
             RetrievalError::Source { err, .. } => err,
         };
-        if let Some(http_error) =
-            (source_error as &dyn Any).downcast_ref::<crate::source::HttpSourceError>()
+
+        if let Some(http_error) = (source_error as &dyn Any).downcast_ref::<HttpSourceError>()
             && let HttpSourceError::Fetcher(fetcher::Error::ClientError(status)) = http_error
         {
             return Some(*status);
         }
+
         None
     }
 
@@ -337,10 +345,11 @@ impl StoreVisitor {
         store_errors(
             &file,
             ErrorData {
-                data: status_code.as_str().as_bytes(),
+                status_code: status_code.as_u16(),
             },
         )
         .await?;
+
         Ok(())
     }
 }

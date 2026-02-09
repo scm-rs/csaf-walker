@@ -47,10 +47,6 @@ crypto-rust = ["csaf-walker/crypto-rust"]
 
 vendored = ["openssl/vendored"]
 
-csaf-validator-lib = [
-    "csaf-walker/csaf-validator-lib"
-]
-
 [[bin]]
 name = "csaf"
 path = "src/main.rs"

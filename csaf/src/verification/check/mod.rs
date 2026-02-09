@@ -19,9 +19,6 @@ pub mod security_advisory;
 pub mod security_incident_response;
 pub mod vex;
 
-#[cfg(feature = "csaf-validator-lib")]
-pub mod csaf_validator_lib;
-
 pub type CheckError = Cow<'static, str>;
 
 #[async_trait(?Send)]

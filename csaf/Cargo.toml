@@ -43,8 +43,6 @@ walkdir = { workspace = true }
 
 # optional
 csaf = { workspace = true, optional = true }
-# for csaf-validator-lib
-deno_core = { workspace = true, optional = true }
 
 # internal
 walker-common = { workspace = true, features = ["openpgp"] }
@@ -65,12 +63,8 @@ crypto-openssl = ["sequoia-openpgp/crypto-openssl"]
 crypto-botan = ["sequoia-openpgp/crypto-botan"]
 crypto-rust = ["sequoia-openpgp/crypto-rust"]
 
-csaf-validator-lib = [
-    "deno_core",
-]
-
 # enable for semver checks (in addition to default)
-_semver = ["csaf-validator-lib"]
+_semver = []
 
 [package.metadata.cargo-all-features]
 always_include_features = [

@@ -143,20 +143,6 @@ impl Report {
             // content checks
 
             let visitor = VerifyingVisitor::with_checks(visitor, init_verifying_visitor());
-            #[cfg(feature = "csaf-validator-lib")]
-            let visitor = {
-                if let Some(profile) = self.verification.profile.into() {
-                    let timeout = self.verification.timeout.map(|timeout| timeout.into());
-                    visitor.add(
-                        "csaf_validator_lib",
-                        csaf_walker::verification::check::csaf_validator_lib::CsafValidatorLib::new(
-                            profile,
-                        ).timeout(timeout).ignore(self.verification.skip),
-                    )
-                } else {
-                    visitor
-                }
-            };
 
             // validation (can we work with this document?)
 

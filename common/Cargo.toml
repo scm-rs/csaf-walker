@@ -35,7 +35,7 @@ indicatif-log-bridge = { workspace = true }
 log = { workspace = true }
 openid = { workspace = true }
 pem = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json", "query"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

@@ -1,6 +1,5 @@
 //! OpenPGP validation
-use crate::utils::openpgp::PublicKey;
-use crate::validate::ValidationOptions;
+use crate::{utils::openpgp::PublicKey, validate::ValidationOptions};
 use anyhow::bail;
 use sequoia_openpgp::{
     Cert, KeyHandle, Packet,
@@ -15,8 +14,9 @@ use sequoia_openpgp::{
 };
 use std::fmt::Debug;
 
-struct Helper<'a> {
-    keys: &'a [PublicKey],
+/// A verify helper for `PublicKey`.
+pub struct Helper<'a> {
+    pub keys: &'a [PublicKey],
 }
 
 impl VerificationHelper for Helper<'_> {
@@ -54,8 +54,9 @@ impl VerificationHelper for Helper<'_> {
     }
 }
 
+/// A wrapper policy, logging the outcome of the package call on debug level.
 #[derive(Debug)]
-struct LoggingPolicy<'a>(pub StandardPolicy<'a>);
+pub struct LoggingPolicy<'a>(pub StandardPolicy<'a>);
 
 impl Policy for LoggingPolicy<'_> {
     fn signature(&self, sig: &Signature, sec: HashAlgoSecurity) -> sequoia_openpgp::Result<()> {
@@ -85,6 +86,7 @@ impl Policy for LoggingPolicy<'_> {
     }
 }
 
+/// Validate a PGP signature
 pub fn validate_signature(
     options: &ValidationOptions,
     keys: &[PublicKey],

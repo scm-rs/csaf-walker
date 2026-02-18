@@ -33,28 +33,20 @@ pub fn decompress(data: Bytes, name: &str) -> Result<Bytes, anyhow::Error> {
 
 /// Decompress bz2 using `bzip2-rs` (pure Rust version)
 #[cfg(all(feature = "bzip2-rs", not(feature = "bzip2")))]
-#[deprecated(since = "0.9.3", note = "Use Compression::decompress instead")]
-pub fn decompress_bzip2(data: &[u8]) -> Result<Bytes, std::io::Error> {
+#[allow(unused)]
+fn decompress_bzip2(data: &[u8]) -> Result<Bytes, std::io::Error> {
     #[allow(deprecated)]
     decompress_bzip2_with(data, &DecompressionOptions::default())
 }
 
 /// Decompress bz2 using `bzip2-rs` (pure Rust version)
 #[cfg(all(feature = "bzip2-rs", not(feature = "bzip2")))]
-#[deprecated(since = "0.9.3", note = "Use Compression::decompress instead")]
-pub fn decompress_bzip2_with(
+fn decompress_bzip2_with(
     data: &[u8],
     opts: &DecompressionOptions,
 ) -> Result<Bytes, std::io::Error> {
     let decoder = bzip2_rs::DecoderReader::new(data);
     decompress_limit(decoder, opts.limit)
-}
-
-/// Decompress bz2 using `bzip2` (based on `libbz2`).
-#[cfg(feature = "bzip2")]
-#[deprecated(since = "0.9.3", note = "Use Compression::decompress instead")]
-pub fn decompress_bzip2(data: &[u8]) -> Result<Bytes, std::io::Error> {
-    decompress_bzip2_with(data, &DecompressionOptions::default())
 }
 
 /// Decompress bz2 using `bzip2` (based on `libbz2`).
@@ -67,17 +59,10 @@ fn decompress_bzip2_with(
     decompress_limit(decoder, opts.limit)
 }
 
-/// Decompress xz using `liblzma`.
-#[cfg(feature = "liblzma")]
-#[deprecated(since = "0.9.3", note = "Use Compression::decompress instead")]
-pub fn decompress_xz(data: &[u8]) -> Result<Bytes, std::io::Error> {
-    decompress_xz_with(data, &Default::default())
-}
-
-/// Decompress xz using `liblzma`.
-#[cfg(feature = "liblzma")]
+/// Decompress xz using `lzma-rust2`.
+#[cfg(feature = "lzma")]
 fn decompress_xz_with(data: &[u8], opts: &DecompressionOptions) -> Result<Bytes, std::io::Error> {
-    let decoder = liblzma::read::XzDecoder::new(data);
+    let decoder = lzma_rust2::XzReader::new(data, false);
     decompress_limit(decoder, opts.limit)
 }
 

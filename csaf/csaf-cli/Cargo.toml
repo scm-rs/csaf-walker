@@ -64,4 +64,5 @@ denylist = [
     "crypto-openssl",
     "crypto-botan",
     "crypto-rust",
+    "vendored",
 ]

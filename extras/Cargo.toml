@@ -44,7 +44,7 @@ _crypto-nettle = [
 ]
 _test = [
     "walker-common/bzip2",
-    "walker-common/liblzma",
+    "walker-common/lzma",
     "walker-common/flate2"
 ]
 

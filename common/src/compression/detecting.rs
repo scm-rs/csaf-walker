@@ -15,7 +15,7 @@ pub enum Compression {
     None,
     #[cfg(any(feature = "bzip2", feature = "bzip2-rs"))]
     Bzip2,
-    #[cfg(feature = "liblzma")]
+    #[cfg(feature = "lzma")]
     Xz,
     #[cfg(feature = "flate2")]
     Gzip,
@@ -79,23 +79,11 @@ impl Compression {
     ) -> Result<Option<Bytes>, std::io::Error> {
         match self {
             #[cfg(any(feature = "bzip2", feature = "bzip2-rs"))]
-            Compression::Bzip2 =>
-            {
-                #[allow(deprecated)]
-                super::decompress_bzip2_with(data, opts).map(Some)
-            }
-            #[cfg(feature = "liblzma")]
-            Compression::Xz =>
-            {
-                #[allow(deprecated)]
-                super::decompress_xz_with(data, opts).map(Some)
-            }
+            Compression::Bzip2 => super::decompress_bzip2_with(data, opts).map(Some),
+            #[cfg(feature = "lzma")]
+            Compression::Xz => super::decompress_xz_with(data, opts).map(Some),
             #[cfg(feature = "flate2")]
-            Compression::Gzip =>
-            {
-                #[allow(deprecated)]
-                super::decompress_gzip_with(data, opts).map(Some)
-            }
+            Compression::Gzip => super::decompress_gzip_with(data, opts).map(Some),
             Compression::None => Ok(None),
         }
     }
@@ -139,7 +127,7 @@ impl<'a> Detector<'a> {
             if file_name.ends_with(".bz2") {
                 return Ok(Compression::Bzip2);
             }
-            #[cfg(feature = "liblzma")]
+            #[cfg(feature = "lzma")]
             if file_name.ends_with(".xz") {
                 return Ok(Compression::Xz);
             }
@@ -162,7 +150,7 @@ impl<'a> Detector<'a> {
             if data.starts_with(b"BZh") {
                 return Ok(Compression::Bzip2);
             }
-            #[cfg(feature = "liblzma")]
+            #[cfg(feature = "lzma")]
             if data.starts_with(&[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]) {
                 return Ok(Compression::Xz);
             }
@@ -206,7 +194,7 @@ mod test {
         assert_eq!(detect("foo.bar.bz2"), Compression::Bzip2);
     }
 
-    #[cfg(feature = "liblzma")]
+    #[cfg(feature = "lzma")]
     #[test]
     fn by_name_xz() {
         assert_eq!(detect("foo.bar.xz"), Compression::Xz);

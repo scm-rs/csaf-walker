@@ -55,21 +55,19 @@ bzip2-rs = { workspace = true, optional = true, features = ["rustc_1_51"] }
 clap = { workspace = true, features = ["derive", "env"], optional = true }
 env_logger = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
-liblzma = { workspace = true, optional = true }
+lzma-rust2 = { workspace = true, optional = true }
 sequoia-openpgp = { workspace = true, optional = true }
 
 [features]
 default = ["bzip2"]
 openpgp = ["sequoia-openpgp"]
 s3 = ["dep:aws-config", "dep:aws-sdk-s3"]
-
-# deprecated
-cli = ["clap", "env_logger"]
+lzma = ["dep:lzma-rust2"]
 
 _crypto-nettle = ["sequoia-openpgp/crypto-nettle"]
 _test = [
     "bzip2",
-    "liblzma",
+    "lzma",
     "flate2"
 ]
 
@@ -81,7 +79,6 @@ always_include_features = [
     "sequoia-openpgp/crypto-nettle",
 ]
 denylist = [
-    "cli",
     "_crypto-nettle",
     "_test",
     "_semver",

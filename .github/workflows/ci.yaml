@@ -28,16 +28,16 @@ jobs:
       matrix_include: |
         [
           {
-            "os": "ubuntu-22.04",
+            "os": "ubuntu-24.04",
             "install": "sudo apt install clang llvm pkg-config nettle-dev"
           },
           {
-            "os": "windows-2022",
+           "os": "windows-2025",
             "args": "--features crypto-cng --no-default-features",
             "skip_all_features": true
           },
           {
-            "os": "macos-14",
+            "os": "macos-15",
             "skip_all_features": true
           }
         ]

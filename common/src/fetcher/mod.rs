@@ -178,12 +178,23 @@ impl Fetcher {
             log::info!("Rate limited (429), retry after: {:?}", retry_after);
             return Err(Error::RateLimited(retry_after));
         }
-        if let Some(status_code) = get_client_error(&response) {
-            log::debug!("Client error: {status_code}");
-            return Err(Error::ClientError(status_code));
-        }
 
-        Ok(processor.process(response).await?)
+        // Now test if we can convert the (possibly failed) response to result data.
+        // This includes allowed for 404 becoming `None`.
+        match processor.process(response).await {
+            // Ok, return
+            Ok(data) => Ok(data),
+            // Error, extract client error
+            Err(err) => {
+                if let Some(status_code) = err.status().and_then(get_client_error) {
+                    log::debug!("Client error: {status_code}");
+                    Err(Error::ClientError(status_code))
+                } else {
+                    // or return other error as is
+                    Err(err.into())
+                }
+            }
+        }
     }
 }
 

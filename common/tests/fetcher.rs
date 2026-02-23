@@ -81,12 +81,31 @@ async fn test_404_should_not_retry() {
         other => panic!("expected ClientError(404), got {other:?}"),
     }
     assert_eq!(attempt_count.load(Ordering::SeqCst), 1);
+}
+
+/// If the result data is `Option`, it should be `None` with 404, not an error.
+#[tokio::test]
+async fn test_404_should_not_retry_optional_ok() {
+    let attempt_count = Arc::new(AtomicUsize::new(0));
+    let attempt_count_clone = attempt_count.clone();
+
+    let server = start_mock_server(move |_req| {
+        attempt_count_clone.fetch_add(1, Ordering::SeqCst);
+        let builder = hyper::Response::builder().status(StatusCode::NOT_FOUND);
+        builder.body("Not found".to_string()).unwrap()
+    })
+    .await;
+
+    let fetcher = Fetcher::new(FetcherOptions::new().retries(2))
+        .await
+        .unwrap();
 
     let result = fetcher.fetch::<Option<String>>(&server).await;
     match result {
-        Err(Error::ClientError(code)) => assert_eq!(code, StatusCode::NOT_FOUND),
-        other => panic!("expected ClientError(404), got {other:?}"),
+        Ok(None) => {}
+        other => panic!("expected Ok(None), got {other:?}"),
     }
+    assert_eq!(attempt_count.load(Ordering::SeqCst), 1);
 }
 
 #[rstest]

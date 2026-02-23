@@ -55,8 +55,8 @@ pub fn calculate_retry_after_from_response_header(
     None
 }
 
-pub fn get_client_error(response: &Response) -> Option<StatusCode> {
-    let status = response.status();
+/// If the status is [`StatusCode::is_client_error`] then return `Option::Some()` with the code.
+pub fn get_client_error(status: StatusCode) -> Option<StatusCode> {
     if status.is_client_error() {
         Some(status)
     } else {

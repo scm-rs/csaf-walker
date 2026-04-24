@@ -15,7 +15,7 @@ pub enum Error {
     #[error("unable to discover metadata")]
     NotFound,
     #[error("DNS request failed: {0}")]
-    Dns(#[from] hickory_resolver::ResolveError),
+    Dns(#[from] hickory_resolver::net::NetError),
 }
 
 #[async_trait(?Send)]
@@ -149,7 +149,7 @@ impl MetadataRetriever {
             TokioConnectionProvider::default(),
         )?;
         #[cfg(any(unix, target_os = "windows"))]
-        let resolver = Resolver::builder_tokio()?.build();
+        let resolver = Resolver::builder_tokio()?.build()?;
 
         match resolver.lookup_ip(&host).await {
             Ok(result) => {

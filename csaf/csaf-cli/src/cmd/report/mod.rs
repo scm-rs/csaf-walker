@@ -254,3 +254,106 @@ fn get_client_error_status(
     };
     Some(*status)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use csaf_walker::discover::DistributionContext;
+    use csaf_walker::{discover::DiscoveredAdvisory, retrieve::RetrievedAdvisory};
+    use std::sync::Arc;
+    use walker_common::retrieve::RetrievalMetadata;
+
+    fn test_discovered() -> DiscoveredAdvisory {
+        DiscoveredAdvisory {
+            context: Arc::new(DistributionContext::Directory(
+                Url::parse("https://example.com/advisories/").unwrap(),
+            )),
+            url: Url::parse("https://example.com/advisories/test.json").unwrap(),
+            digest: None,
+            signature: None,
+            modified: std::time::SystemTime::now(),
+        }
+    }
+
+    fn test_retrieved() -> RetrievedAdvisory {
+        RetrievedAdvisory {
+            discovered: test_discovered(),
+            data: bytes::Bytes::from_static(b"{}"),
+            signature: None,
+            sha256: None,
+            sha512: None,
+            metadata: RetrievalMetadata {
+                last_modification: None,
+                etag: None,
+            },
+        }
+    }
+
+    fn make_client_error(
+        status: StatusCode,
+    ) -> VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory> {
+        VerificationError::Upstream(ValidationError::Retrieval(RetrievalError::Source {
+            discovered: test_discovered(),
+            err: DispatchSourceError::Http(HttpSourceError::Fetcher(
+                fetcher::Error::ClientError(status),
+            )),
+        }))
+    }
+
+    #[test]
+    fn extract_404_client_error() {
+        let err = make_client_error(StatusCode::NOT_FOUND);
+        assert_eq!(get_client_error_status(&err), Some(StatusCode::NOT_FOUND));
+    }
+
+    #[test]
+    fn extract_403_client_error() {
+        let err = make_client_error(StatusCode::FORBIDDEN);
+        assert_eq!(get_client_error_status(&err), Some(StatusCode::FORBIDDEN));
+    }
+
+    #[test]
+    fn returns_none_for_parsing_error() {
+        let err: VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory> =
+            VerificationError::Parsing {
+                advisory: ValidatedAdvisory {
+                    retrieved: test_retrieved(),
+                },
+                error: serde_json::from_str::<String>("invalid").unwrap_err(),
+            };
+        assert_eq!(get_client_error_status(&err), None);
+    }
+
+    #[test]
+    fn returns_none_for_digest_mismatch() {
+        let err: VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory> =
+            VerificationError::Upstream(ValidationError::DigestMismatch {
+                expected: "abc".to_string(),
+                actual: "def".to_string(),
+                retrieved: test_retrieved(),
+            });
+        assert_eq!(get_client_error_status(&err), None);
+    }
+
+    #[test]
+    fn returns_none_for_file_source_error() {
+        let err: VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory> =
+            VerificationError::Upstream(ValidationError::Retrieval(RetrievalError::Source {
+                discovered: test_discovered(),
+                err: DispatchSourceError::File(anyhow::anyhow!("file not found")),
+            }));
+        assert_eq!(get_client_error_status(&err), None);
+    }
+
+    #[test]
+    fn returns_none_for_rate_limited_error() {
+        let err: VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory> =
+            VerificationError::Upstream(ValidationError::Retrieval(RetrievalError::Source {
+                discovered: test_discovered(),
+                err: DispatchSourceError::Http(HttpSourceError::Fetcher(
+                    fetcher::Error::RateLimited(std::time::Duration::from_secs(60)),
+                )),
+            }));
+        assert_eq!(get_client_error_status(&err), None);
+    }
+}

@@ -4,9 +4,12 @@ use crate::{
 };
 use csaf_walker::{
     discover::AsDiscovered,
-    report::{DocumentKey, Duplicates, ReportRenderOption, ReportResult, render_to_html},
+    report::{
+        DocumentKey, Duplicates, ReportRenderOption, ReportResult, get_client_error_status,
+        render_to_html,
+    },
     retrieve::RetrievingVisitor,
-    source::{DispatchSource, DispatchSourceError, HttpSourceError},
+    source::DispatchSource,
     validation::{ValidatedAdvisory, ValidationError, ValidationVisitor},
     verification::{
         VerificationError, VerifiedAdvisory, VerifyingVisitor,
@@ -29,7 +32,6 @@ use walker_common::{
         CommandDefaults, client::ClientArguments, parser::parse_allow_client_errors,
         runner::RunnerArguments, validation::ValidationArguments,
     },
-    fetcher,
     progress::Progress,
     report::{self, Statistics},
     retrieve::RetrievalError,
@@ -137,11 +139,11 @@ impl Report {
                                 },
                             };
 
-                            if let Some(status) = get_client_error_status(&err) {
-                                if allowed_client_errors.contains(&status) {
-                                    ignored_errors.lock().await.insert(name, status);
-                                    return Ok::<_, anyhow::Error>(());
-                                }
+                            if let Some(status) = get_client_error_status(&err)
+                                && allowed_client_errors.contains(&status)
+                            {
+                                ignored_errors.lock().await.insert(name, status);
+                                return Ok::<_, anyhow::Error>(());
                             }
 
                             errors.lock().await.insert(name, err.to_string());
@@ -236,32 +238,14 @@ impl Report {
     }
 }
 
-/// Extract the HTTP client error status code from a verification error, if present.
-fn get_client_error_status(
-    err: &VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory>,
-) -> Option<StatusCode> {
-    let VerificationError::Upstream(validation_err) = err else {
-        return None;
-    };
-    let ValidationError::Retrieval(retrieval_err) = validation_err else {
-        return None;
-    };
-    let RetrievalError::Source { err, .. } = retrieval_err;
-    let DispatchSourceError::Http(HttpSourceError::Fetcher(fetcher::Error::ClientError(status))) =
-        err
-    else {
-        return None;
-    };
-    Some(*status)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use csaf_walker::discover::DistributionContext;
+    use csaf_walker::source::{DispatchSourceError, HttpSourceError};
     use csaf_walker::{discover::DiscoveredAdvisory, retrieve::RetrievedAdvisory};
     use std::sync::Arc;
-    use walker_common::retrieve::RetrievalMetadata;
+    use walker_common::{fetcher, retrieve::RetrievalMetadata};
 
     fn test_discovered() -> DiscoveredAdvisory {
         DiscoveredAdvisory {
@@ -294,9 +278,9 @@ mod tests {
     ) -> VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory> {
         VerificationError::Upstream(ValidationError::Retrieval(RetrievalError::Source {
             discovered: test_discovered(),
-            err: DispatchSourceError::Http(HttpSourceError::Fetcher(
-                fetcher::Error::ClientError(status),
-            )),
+            err: DispatchSourceError::Http(HttpSourceError::Fetcher(fetcher::Error::ClientError(
+                status,
+            ))),
         }))
     }
 

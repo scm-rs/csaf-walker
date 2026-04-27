@@ -6,7 +6,7 @@ use csaf_walker::{
     discover::AsDiscovered,
     report::{DocumentKey, Duplicates, ReportRenderOption, ReportResult, render_to_html},
     retrieve::RetrievingVisitor,
-    source::DispatchSource,
+    source::{DispatchSource, DispatchSourceError, HttpSourceError},
     validation::{ValidatedAdvisory, ValidationError, ValidationVisitor},
     verification::{
         VerificationError, VerifiedAdvisory, VerifyingVisitor,
@@ -14,7 +14,7 @@ use csaf_walker::{
     },
     visitors::duplicates::DetectDuplicatesVisitor,
 };
-use reqwest::Url;
+use reqwest::{StatusCode, Url};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -26,11 +26,13 @@ use std::{
 use tokio::sync::Mutex;
 use walker_common::{
     cli::{
-        CommandDefaults, client::ClientArguments, runner::RunnerArguments,
-        validation::ValidationArguments,
+        CommandDefaults, client::ClientArguments, parser::parse_allow_client_errors,
+        runner::RunnerArguments, validation::ValidationArguments,
     },
+    fetcher,
     progress::Progress,
     report::{self, Statistics},
+    retrieve::RetrievalError,
     utils::url::Urlify,
     validate::ValidationOptions,
 };
@@ -58,6 +60,14 @@ pub struct Report {
 
     #[command(flatten)]
     render: RenderOptions,
+
+    /// Shorthand for `--allow-client-errors 404`.
+    #[arg(long)]
+    allow_missing: bool,
+
+    /// Classify retrieval failures with these 4xx status codes separately in the report.
+    #[arg(long)]
+    allow_client_errors: Vec<String>,
 }
 
 impl CommandDefaults for Report {}
@@ -85,17 +95,21 @@ pub struct RenderOptions {
 impl Report {
     pub async fn run<P: Progress>(self, progress: P) -> anyhow::Result<()> {
         let options: ValidationOptions = self.validation.into();
+        let allowed_client_errors =
+            parse_allow_client_errors(self.allow_missing, self.allow_client_errors)?;
 
         let total = Arc::new(AtomicUsize::default());
         let duplicates: Arc<Mutex<Duplicates>> = Default::default();
         let errors: Arc<Mutex<BTreeMap<DocumentKey, String>>> = Default::default();
         let warnings: Arc<Mutex<BTreeMap<DocumentKey, Vec<CheckError>>>> = Default::default();
+        let ignored_errors: Arc<Mutex<BTreeMap<DocumentKey, StatusCode>>> = Default::default();
 
         {
             let total = total.clone();
             let duplicates = duplicates.clone();
             let errors = errors.clone();
             let warnings = warnings.clone();
+            let ignored_errors = ignored_errors.clone();
 
             let visitor = move |advisory: Result<
                 VerifiedAdvisory<ValidatedAdvisory, &'static str>,
@@ -105,6 +119,8 @@ impl Report {
 
                 let errors = errors.clone();
                 let warnings = warnings.clone();
+                let ignored_errors = ignored_errors.clone();
+                let allowed_client_errors = allowed_client_errors.clone();
 
                 async move {
                     let adv = match advisory {
@@ -120,6 +136,13 @@ impl Report {
                                     url: Default::default(),
                                 },
                             };
+
+                            if let Some(status) = get_client_error_status(&err) {
+                                if allowed_client_errors.contains(&status) {
+                                    ignored_errors.lock().await.insert(name, status);
+                                    return Ok::<_, anyhow::Error>(());
+                                }
+                            }
 
                             errors.lock().await.insert(name, err.to_string());
                             return Ok::<_, anyhow::Error>(());
@@ -169,6 +192,7 @@ impl Report {
         let total = (*total).load(Ordering::Acquire);
         let errors = errors.lock().await;
         let warnings = warnings.lock().await;
+        let ignored_errors = ignored_errors.lock().await;
 
         Self::render(
             &self.render,
@@ -177,6 +201,7 @@ impl Report {
                 duplicates: &*duplicates.lock().await,
                 errors: &errors,
                 warnings: &warnings,
+                ignored_errors: &ignored_errors,
             },
         )?;
 
@@ -209,4 +234,23 @@ impl Report {
 
         Ok(())
     }
+}
+
+/// Extract the HTTP client error status code from a verification error, if present.
+fn get_client_error_status(
+    err: &VerificationError<ValidationError<DispatchSource>, ValidatedAdvisory>,
+) -> Option<StatusCode> {
+    let VerificationError::Upstream(validation_err) = err else {
+        return None;
+    };
+    let ValidationError::Retrieval(retrieval_err) = validation_err else {
+        return None;
+    };
+    let RetrievalError::Source { err, .. } = retrieval_err;
+    let DispatchSourceError::Http(HttpSourceError::Fetcher(fetcher::Error::ClientError(status))) =
+        err
+    else {
+        return None;
+    };
+    Some(*status)
 }

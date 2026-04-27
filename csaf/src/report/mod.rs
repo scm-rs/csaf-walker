@@ -5,6 +5,7 @@ mod render;
 pub use render::*;
 
 use crate::discover::DiscoveredAdvisory;
+use reqwest::StatusCode;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use url::Url;
@@ -16,6 +17,8 @@ pub struct ReportResult<'d> {
     pub duplicates: &'d Duplicates,
     pub errors: &'d BTreeMap<DocumentKey, String>,
     pub warnings: &'d BTreeMap<DocumentKey, Vec<Cow<'static, str>>>,
+    /// Documents that could not be retrieved due to allowed client errors (e.g. 404).
+    pub ignored_errors: &'d BTreeMap<DocumentKey, StatusCode>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -38,6 +38,7 @@ pub enum Title {
     Duplicates,
     Warnings,
     Errors,
+    IgnoredErrors,
 }
 
 impl Display for Title {
@@ -46,6 +47,7 @@ impl Display for Title {
             Self::Duplicates => f.write_str("Duplicates"),
             Self::Warnings => f.write_str("Warnings"),
             Self::Errors => f.write_str("Errors"),
+            Self::IgnoredErrors => f.write_str("Ignored Errors"),
         }
     }
 }
@@ -229,6 +231,46 @@ impl HtmlReport<'_> {
         Ok(())
     }
 
+    fn render_ignored_errors(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let count = self.result.ignored_errors.len();
+
+        let data = |f: &mut Formatter<'_>| {
+            for (k, v) in self.result.ignored_errors {
+                let (url, label) = self.link_document(k);
+
+                let id = format!("ignored-error-{url}");
+                let id = html_escape::encode_quoted_attribute(&id);
+
+                writeln!(
+                    f,
+                    r##"
+            <tr>
+                <td id="{id}"><a href="{url}" target="_blank" style="white-space: nowrap;">{label}</a> <a class="link-secondary" href="#{id}">§</a></td>
+                <td><code>{v}</code></td>
+            </tr>
+            "##,
+                    url = html_escape::encode_quoted_attribute(&url),
+                    label = html_escape::encode_text(&label),
+                    v = html_escape::encode_text(&v.to_string()),
+                )?;
+            }
+            Ok(())
+        };
+        if count > 0 {
+            Self::render_table(
+                f,
+                [count],
+                Title::IgnoredErrors,
+                &format!(
+                    "{count} file(s) with ignored retrieval errors",
+                    count = Formatted(count),
+                ),
+                data,
+            )?;
+        }
+        Ok(())
+    }
+
     fn gen_link(&self, key: &DocumentKey) -> Option<(String, String)> {
         let label = key.url.clone();
 
@@ -262,7 +304,7 @@ impl HtmlReport<'_> {
             let (class, text) = if count > 0 {
                 (
                     match title {
-                        Title::Warnings => "text-bg-warning",
+                        Title::Warnings | Title::IgnoredErrors => "text-bg-warning",
                         _ => "text-bg-danger",
                     },
                     Formatted(count).to_string(),
@@ -299,6 +341,7 @@ impl Display for HtmlReport<'_> {
         self.render_total(f)?;
         self.render_duplicates(f)?;
         self.render_errors(f)?;
+        self.render_ignored_errors(f)?;
         self.render_warnings(f)?;
         Ok(())
     }
@@ -317,6 +360,7 @@ mod test {
             duplicates: &Default::default(),
             errors: &Default::default(),
             warnings: &Default::default(),
+            ignored_errors: &Default::default(),
         };
         let _output = PathBuf::default();
         let base_url = Some(Url::parse("file:///foo/bar/").expect("example value must parse"));

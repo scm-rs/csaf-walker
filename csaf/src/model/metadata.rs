@@ -75,10 +75,12 @@ pub enum PublisherCategory {
     Vendor,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub enum MetadataVersion {
     #[serde(rename = "2.0")]
     V2_0,
+    #[serde(untagged)]
+    Unknown(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]

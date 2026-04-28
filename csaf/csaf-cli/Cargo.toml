@@ -66,3 +66,6 @@ denylist = [
     "crypto-rust",
     "vendored",
 ]
+
+[dev-dependencies]
+rstest = { workspace = true }

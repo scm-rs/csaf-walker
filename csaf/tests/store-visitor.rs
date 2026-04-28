@@ -1,7 +1,9 @@
 use bytes::Bytes;
 use csaf_walker::{
     discover::{DiscoveredAdvisory, DistributionContext},
-    model::metadata::{Distribution, ProviderMetadata, Publisher, Role},
+    model::metadata::{
+        Distribution, MetadataVersion, ProviderMetadata, Publisher, PublisherCategory, Role,
+    },
     retrieve::{RetrievedAdvisory, RetrievedVisitor},
     source::{FileSource, HttpSource, HttpSourceError},
     visitors::store::StoreVisitor,
@@ -26,12 +28,12 @@ fn create_test_metadata() -> ProviderMetadata {
         }],
         last_updated: chrono::Utc::now(),
         list_on_csaf_aggregators: false,
-        metadata_version: "2.0".to_string(),
+        metadata_version: MetadataVersion::V2_0,
         mirror_on_csaf_aggregators: false,
         public_openpgp_keys: vec![],
         publisher: Publisher {
-            category: "vendor".to_string(),
-            contact_details: "security@example.com".to_string(),
+            category: PublisherCategory::Vendor,
+            contact_details: Some("security@example.com".to_string()),
             issuing_authority: None,
             name: "Example Corp".to_string(),
             namespace: "https://example.com".to_string(),

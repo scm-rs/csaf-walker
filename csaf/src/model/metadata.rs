@@ -64,7 +64,7 @@ pub struct Publisher {
     pub namespace: String,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PublisherCategory {
     Coordinator,
@@ -73,6 +73,8 @@ pub enum PublisherCategory {
     Translator,
     User,
     Vendor,
+    #[serde(untagged)]
+    Unknown(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]

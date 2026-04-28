@@ -55,12 +55,30 @@ impl<'a> From<&'a Key> for walker_common::validate::source::Key<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Publisher {
-    pub category: String,
-    pub contact_details: String,
+    pub category: PublisherCategory,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact_details: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub issuing_authority: Option<String>,
     pub name: String,
     pub namespace: String,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PublisherCategory {
+    Coordinator,
+    Discoverer,
+    Other,
+    Translator,
+    User,
+    Vendor,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
+pub enum MetadataVersion {
+    #[serde(rename = "2.0")]
+    V2_0,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -76,7 +94,7 @@ pub struct ProviderMetadata {
     #[serde(default)]
     pub list_on_csaf_aggregators: bool,
 
-    pub metadata_version: String,
+    pub metadata_version: MetadataVersion,
 
     #[serde(rename = "mirror_on_CSAF_aggregators")]
     #[serde(default)]

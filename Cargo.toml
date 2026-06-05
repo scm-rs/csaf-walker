@@ -28,7 +28,7 @@ bzip2-rs = "0.1"
 chrono = { version = "0.4.24", default-features = false }
 clap = "4.5"
 colored_json = "5"
-csaf = { version = "0.5.0", default-features = false }
+csaf-rs = { version = "0.4.1", default-features = false }
 csv = "1"
 cyclonedx-bom = "0.8.0"
 digest = "0.11.2"
@@ -85,6 +85,6 @@ tag = false
 tag-name = "v{{version}}"
 
 [patch.crates-io]
-# csaf = { path = "../csaf-rs" }
+csaf-rs = { path = "../csaf-rust/csaf-rs" }
 #csaf = { git = "https://github.com/ctron/csaf-rs", rev = "0bbc262c76c50f7ec918e65d1cf9bf4c5dd564d7" }
 #cyclonedx-bom = { path = "../cyclonedx-rust-cargo/cyclonedx-bom" }

@@ -8,10 +8,7 @@ use csaf_walker::{
     retrieve::RetrievingVisitor,
     source::DispatchSource,
     validation::{ValidatedAdvisory, ValidationError, ValidationVisitor},
-    verification::{
-        VerificationError, VerifiedAdvisory, VerifyingVisitor,
-        check::{CheckError, init_verifying_visitor},
-    },
+    verification::{VerificationError, VerifiedAdvisory, VerifyingVisitor, check::CheckError},
     visitors::duplicates::DetectDuplicatesVisitor,
 };
 use reqwest::Url;

@@ -19,6 +19,10 @@ use walker_common::{
     changes::{self, ChangeEntry, ChangeSource},
     fetcher::{self, DataProcessor, Fetcher},
     retrieve::{RetrievalMetadata, RetrievedDigest, RetrievingDigest},
+};
+
+#[cfg(feature = "openpgp")]
+use walker_common::{
     utils::openpgp::PublicKey,
     validate::source::{Key, KeySource, KeySourceError},
 };
@@ -320,6 +324,7 @@ impl DataProcessor for FetchingRetrievedAdvisory {
     }
 }
 
+#[cfg(feature = "openpgp")]
 impl KeySource for HttpSource {
     type Error = fetcher::Error;
 

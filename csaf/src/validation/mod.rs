@@ -14,9 +14,12 @@ use std::{
 use url::Url;
 use walker_common::{
     retrieve::RetrievalError,
-    utils::{openpgp::PublicKey, url::Urlify},
-    validate::{ValidationOptions, digest::validate_digest, openpgp},
+    utils::url::Urlify,
+    validate::{ValidationOptions, digest::validate_digest},
 };
+
+#[cfg(feature = "openpgp")]
+use walker_common::{utils::openpgp::PublicKey, validate::openpgp};
 
 /// A validated CSAF document
 ///
@@ -183,6 +186,8 @@ where
     S: Source,
 {
     visitor: V,
+    // without the openpgp feature, this is only set, never read
+    #[cfg_attr(not(feature = "openpgp"), allow(unused))]
     options: ValidationOptions,
     _marker: PhantomData<S>,
 }
@@ -228,6 +233,8 @@ where
     /// Perform the actual validation.
     ///
     /// Returning either a processing error, or a result which will be forwarded to the visitor.
+    // without the openpgp feature, `context` (holding the keys) is unused
+    #[cfg_attr(not(feature = "openpgp"), allow(unused_variables))]
     async fn validate(
         &self,
         context: &InnerValidationContext<V::Context>,
@@ -252,8 +259,9 @@ where
             ));
         }
 
+        #[cfg(feature = "openpgp")]
         if let Some(signature) = &retrieved.signature {
-            match openpgp::validate_signature(
+            return match openpgp::validate_signature(
                 &self.options,
                 &context.keys,
                 signature,
@@ -263,15 +271,16 @@ where
                 Err(error) => Err(ValidationProcessError::Proceed(
                     ValidationError::Signature { error, retrieved },
                 )),
-            }
-        } else {
-            Ok(ValidatedAdvisory { retrieved })
+            };
         }
+
+        Ok(ValidatedAdvisory { retrieved })
     }
 }
 
 pub struct InnerValidationContext<VC> {
     context: VC,
+    #[cfg(feature = "openpgp")]
     keys: Vec<PublicKey>,
 }
 
@@ -287,6 +296,7 @@ where
         &self,
         context: &RetrievalContext<'_>,
     ) -> Result<Self::Context, Self::Error> {
+        #[cfg(feature = "openpgp")]
         let keys = context.keys.clone();
 
         let context = self
@@ -295,7 +305,11 @@ where
             .await
             .map_err(Error::Visitor)?;
 
-        Ok(Self::Context { context, keys })
+        Ok(Self::Context {
+            context,
+            #[cfg(feature = "openpgp")]
+            keys,
+        })
     }
 
     async fn visit_advisory(

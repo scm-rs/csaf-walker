@@ -20,9 +20,11 @@ use time::OffsetDateTime;
 use tokio::sync::mpsc;
 use url::Url;
 use walkdir::WalkDir;
+use walker_common::{retrieve::RetrievalMetadata, source::file::read_sig_and_digests};
+
+#[cfg(feature = "openpgp")]
 use walker_common::{
-    retrieve::RetrievalMetadata,
-    source::file::{read_sig_and_digests, to_path},
+    source::file::to_path,
     utils::{self, openpgp::PublicKey},
     validate::source::{Key, KeySource, KeySourceError},
 };
@@ -271,6 +273,7 @@ impl Source for FileSource {
     }
 }
 
+#[cfg(feature = "openpgp")]
 impl KeySource for FileSource {
     type Error = anyhow::Error;
 

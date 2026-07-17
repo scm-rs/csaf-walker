@@ -44,6 +44,7 @@ pub struct Key {
     pub url: Url,
 }
 
+#[cfg(feature = "openpgp")]
 impl<'a> From<&'a Key> for walker_common::validate::source::Key<'a> {
     fn from(value: &'a Key) -> Self {
         walker_common::validate::source::Key {

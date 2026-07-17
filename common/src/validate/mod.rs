@@ -3,7 +3,10 @@ mod error;
 pub use error::*;
 
 pub mod digest;
+
+#[cfg(feature = "openpgp")]
 pub mod openpgp;
+#[cfg(feature = "openpgp")]
 pub mod source;
 
 use std::time::SystemTime;

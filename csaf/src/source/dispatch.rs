@@ -3,6 +3,7 @@ use crate::discover::{DiscoveredAdvisory, DistributionContext};
 use crate::model::metadata::ProviderMetadata;
 use crate::retrieve::RetrievedAdvisory;
 use crate::source::{FileSource, HttpSource};
+#[cfg(feature = "openpgp")]
 use walker_common::{
     utils::openpgp::PublicKey,
     validate::source::{Key, KeySource, KeySourceError, MapSourceError},
@@ -93,6 +94,7 @@ impl Source for DispatchSource {
     }
 }
 
+#[cfg(feature = "openpgp")]
 impl KeySource for DispatchSource {
     type Error = anyhow::Error;
 

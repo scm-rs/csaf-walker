@@ -14,7 +14,12 @@ use std::{
 use url::Url;
 use walker_common::{
     retrieve::{RetrievalError, RetrievalMetadata, RetrievedDigest, RetrievedDocument},
-    utils::{openpgp::PublicKey, url::Urlify},
+    utils::url::Urlify,
+};
+
+#[cfg(feature = "openpgp")]
+use walker_common::{
+    utils::openpgp::PublicKey,
     validate::source::{KeySource, KeySourceError},
 };
 
@@ -85,6 +90,7 @@ impl RetrievedDocument for RetrievedAdvisory {
 
 pub struct RetrievalContext<'c> {
     pub discovered: &'c DiscoveredContext<'c>,
+    #[cfg(feature = "openpgp")]
     pub keys: &'c Vec<PublicKey>,
 }
 
@@ -138,7 +144,7 @@ where
     }
 }
 
-pub struct RetrievingVisitor<V: RetrievedVisitor<S>, S: Source + KeySource> {
+pub struct RetrievingVisitor<V: RetrievedVisitor<S>, S: Source> {
     visitor: V,
     source: S,
 }
@@ -146,13 +152,33 @@ pub struct RetrievingVisitor<V: RetrievedVisitor<S>, S: Source + KeySource> {
 impl<V, S> RetrievingVisitor<V, S>
 where
     V: RetrievedVisitor<S>,
-    S: Source + KeySource,
+    S: Source,
 {
     pub fn new(source: S, visitor: V) -> Self {
         Self { visitor, source }
     }
+
+    /// Load a single advisory and hand the outcome over to the wrapped visitor.
+    async fn load_and_visit(
+        &self,
+        context: &V::Context,
+        discovered: DiscoveredAdvisory,
+    ) -> Result<(), V::Error> {
+        let advisory = self
+            .source
+            .load_advisory(discovered.clone())
+            .await
+            .map_err(|err| RetrievalError::Source { err, discovered });
+
+        self.visitor.visit_advisory(context, advisory).await
+    }
 }
 
+/// An error from the [`RetrievingVisitor`].
+///
+/// With the `openpgp` feature disabled, this type has no `KSE` (key source
+/// error) parameter and no `KeySource` variant.
+#[cfg(feature = "openpgp")]
 #[derive(Debug, thiserror::Error)]
 pub enum Error<VE, SE, KSE>
 where
@@ -168,6 +194,24 @@ where
     Visitor(VE),
 }
 
+/// An error from the [`RetrievingVisitor`].
+///
+/// With the `openpgp` feature enabled, this type has an additional `KSE` (key
+/// source error) parameter and a `KeySource` variant.
+#[cfg(not(feature = "openpgp"))]
+#[derive(Debug, thiserror::Error)]
+pub enum Error<VE, SE>
+where
+    VE: std::fmt::Display + Debug,
+    SE: std::fmt::Display + Debug,
+{
+    #[error("Source error: {0}")]
+    Source(SE),
+    #[error(transparent)]
+    Visitor(VE),
+}
+
+#[cfg(feature = "openpgp")]
 impl<V, S> DiscoveredVisitor for RetrievingVisitor<V, S>
 where
     V: RetrievedVisitor<S>,
@@ -224,17 +268,40 @@ where
         context: &Self::Context,
         discovered: DiscoveredAdvisory,
     ) -> Result<(), Self::Error> {
-        let advisory = self
-            .source
-            .load_advisory(discovered.clone())
+        self.load_and_visit(context, discovered)
             .await
-            .map_err(|err| RetrievalError::Source { err, discovered });
+            .map_err(Error::Visitor)
+    }
+}
 
+#[cfg(not(feature = "openpgp"))]
+impl<V, S> DiscoveredVisitor for RetrievingVisitor<V, S>
+where
+    V: RetrievedVisitor<S>,
+    S: Source,
+{
+    type Error = Error<V::Error, <S as walker_common::source::Source>::Error>;
+    type Context = V::Context;
+
+    async fn visit_context(
+        &self,
+        context: &DiscoveredContext<'_>,
+    ) -> Result<Self::Context, Self::Error> {
         self.visitor
-            .visit_advisory(context, advisory)
+            .visit_context(&RetrievalContext {
+                discovered: context,
+            })
             .await
-            .map_err(Error::Visitor)?;
+            .map_err(Error::Visitor)
+    }
 
-        Ok(())
+    async fn visit_advisory(
+        &self,
+        context: &Self::Context,
+        discovered: DiscoveredAdvisory,
+    ) -> Result<(), Self::Error> {
+        self.load_and_visit(context, discovered)
+            .await
+            .map_err(Error::Visitor)
     }
 }

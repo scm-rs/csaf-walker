@@ -31,7 +31,6 @@ parking_lot = { workspace = true }
 percent-encoding = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 sectxtlib = { workspace = true }
-sequoia-openpgp = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -43,9 +42,10 @@ walkdir = { workspace = true }
 
 # optional
 csaf = { workspace = true, optional = true }
+sequoia-openpgp = { workspace = true, optional = true }
 
 # internal
-walker-common = { workspace = true, features = ["openpgp"] }
+walker-common = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
@@ -53,25 +53,27 @@ hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
-walker-common = { workspace = true, features = ["openpgp", "lzma"] }
+walker-common = { workspace = true, features = ["lzma"] }
 
 [features]
-default = ["crypto-nettle", "csaf"]
-crypto-cng = ["sequoia-openpgp/crypto-cng"]
-crypto-nettle = ["sequoia-openpgp/crypto-nettle"]
-crypto-openssl = ["sequoia-openpgp/crypto-openssl"]
-crypto-botan = ["sequoia-openpgp/crypto-botan"]
-crypto-rust = ["sequoia-openpgp/crypto-rust"]
+default = ["openpgp", "crypto-nettle", "csaf"]
+openpgp = ["sequoia-openpgp", "walker-common/openpgp"]
+crypto-cng = ["openpgp", "sequoia-openpgp/crypto-cng"]
+crypto-nettle = ["openpgp", "sequoia-openpgp/crypto-nettle"]
+crypto-openssl = ["openpgp", "sequoia-openpgp/crypto-openssl"]
+crypto-botan = ["openpgp", "sequoia-openpgp/crypto-botan"]
+crypto-rust = ["openpgp", "sequoia-openpgp/crypto-rust"]
 
 # enable for semver checks (in addition to default)
 _semver = []
 
 [package.metadata.cargo-all-features]
 always_include_features = [
-    "crypto-nettle",
+    "sequoia-openpgp/crypto-nettle",
 ]
 denylist = [
     "crypto-cng",
+    "crypto-nettle",
     "crypto-openssl",
     "crypto-botan",
     "crypto-rust",

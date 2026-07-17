@@ -6,22 +6,20 @@ use crate::{
     validation::{ValidatedAdvisory, ValidatedVisitor, ValidationContext, ValidationError},
 };
 use anyhow::Context;
-use sequoia_openpgp::{Cert, armor::Kind, serialize::SerializeInto};
-use std::{
-    any::Any,
-    collections::HashSet,
-    fmt::Debug,
-    io::{ErrorKind, Write},
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::{any::Any, collections::HashSet, fmt::Debug, io::ErrorKind, path::PathBuf, rc::Rc};
 use tokio::fs;
 use walker_common::{
     fetcher,
     retrieve::RetrievalError,
     store::{Document, ErrorData, StoreError, store_document, store_errors},
-    utils::openpgp::PublicKey,
 };
+
+#[cfg(feature = "openpgp")]
+use sequoia_openpgp::{Cert, armor::Kind, serialize::SerializeInto};
+#[cfg(feature = "openpgp")]
+use std::{io::Write, path::Path};
+#[cfg(feature = "openpgp")]
+use walker_common::utils::openpgp::PublicKey;
 
 pub const DIR_METADATA: &str = "metadata";
 
@@ -110,6 +108,7 @@ where
     ) -> Result<Self::Context, Self::Error> {
         self.store_provider_metadata(context.metadata).await?;
         self.prepare_distributions(context.metadata).await?;
+        #[cfg(feature = "openpgp")]
         self.store_keys(context.keys).await?;
 
         Ok(Rc::new(context.metadata.clone()))
@@ -150,6 +149,7 @@ impl<S: Source> ValidatedVisitor<S> for StoreVisitor {
     ) -> Result<Self::Context, Self::Error> {
         self.store_provider_metadata(context.metadata).await?;
         self.prepare_distributions(context.metadata).await?;
+        #[cfg(feature = "openpgp")]
         self.store_keys(context.retrieval.keys).await?;
         Ok(())
     }
@@ -227,6 +227,7 @@ impl StoreVisitor {
         Ok(())
     }
 
+    #[cfg(feature = "openpgp")]
     async fn store_keys(&self, keys: &[PublicKey]) -> Result<(), StoreError> {
         let metadata = self.base.join(DIR_METADATA).join("keys");
         std::fs::create_dir(&metadata)
@@ -251,6 +252,7 @@ impl StoreVisitor {
         Ok(())
     }
 
+    #[cfg(feature = "openpgp")]
     async fn store_cert(&self, cert: &Cert, path: &Path) -> Result<(), StoreError> {
         let name = path.join(format!("{}.txt", cert.fingerprint().to_hex()));
 
@@ -263,6 +265,7 @@ impl StoreVisitor {
         Ok(())
     }
 
+    #[cfg(feature = "openpgp")]
     fn serialize_key(cert: &Cert) -> Result<Vec<u8>, anyhow::Error> {
         let mut writer = sequoia_openpgp::armor::Writer::new(Vec::new(), Kind::PublicKey)?;
         writer.write_all(&cert.to_vec()?)?;

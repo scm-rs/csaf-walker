@@ -5,7 +5,7 @@ mod render;
 pub use render::*;
 
 use crate::discover::DiscoveredAdvisory;
-use std::borrow::Cow;
+use crate::verification::check::CheckError;
 use std::collections::{BTreeMap, HashSet};
 use url::Url;
 use walker_common::utils::url::Urlify;
@@ -15,7 +15,7 @@ pub struct ReportResult<'d> {
     pub total: usize,
     pub duplicates: &'d Duplicates,
     pub errors: &'d BTreeMap<DocumentKey, String>,
-    pub warnings: &'d BTreeMap<DocumentKey, Vec<Cow<'static, str>>>,
+    pub warnings: &'d BTreeMap<DocumentKey, Vec<CheckError>>,
 }
 
 #[derive(Clone, Debug, Default)]

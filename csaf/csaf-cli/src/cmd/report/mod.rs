@@ -2,6 +2,7 @@ use crate::{
     cmd::{DiscoverArguments, FilterArguments, VerificationArguments},
     common::walk_visitor,
 };
+use csaf_walker::verification::check::CsafValidation;
 use csaf_walker::{
     discover::AsDiscovered,
     report::{DocumentKey, Duplicates, ReportRenderOption, ReportResult, render_to_html},
@@ -139,7 +140,10 @@ impl Report {
 
             // content checks
 
-            let visitor = VerifyingVisitor::with_checks(visitor, init_verifying_visitor());
+            let visitor = VerifyingVisitor::with_checks(
+                visitor,
+                vec![("csaf", Box::new(CsafValidation("full")))],
+            );
 
             // validation (can we work with this document?)
 

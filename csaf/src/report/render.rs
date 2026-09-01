@@ -197,7 +197,7 @@ impl HtmlReport<'_> {
                 <code>{v}</code>
             </li>
             "#,
-                        v = html_escape::encode_text(&text),
+                        v = html_escape::encode_text(&text.message),
                     )?;
                 }
 

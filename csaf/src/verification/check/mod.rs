@@ -1,8 +1,12 @@
 use crate::verification::Csaf;
 use async_trait::async_trait;
+use csaf::validation::{TestResultStatus, Validatable, ValidationError};
 use std::borrow::Cow;
 
-pub type CheckError = Cow<'static, str>;
+#[derive(Debug)]
+pub struct CheckError {
+    pub message: Cow<'static, str>,
+}
 
 #[async_trait(?Send)]
 pub trait Check {
@@ -43,4 +47,50 @@ impl Checking {
     }
 }
 
-pub struct CsafValidation;c
+pub struct CsafValidation(pub &'static str);
+
+impl CsafValidation {
+    fn validate<V>(&self, csaf: &V) -> anyhow::Result<Vec<CheckError>>
+    where
+        V: Validatable,
+    {
+        fn add(result: &mut Vec<CheckError>, errors: Vec<ValidationError>) {
+            for error in errors {
+                result.push(CheckError {
+                    message: error.message.into(),
+                });
+            }
+        }
+
+        let tests = V::tests_in_preset(self.0);
+
+        let mut results = vec![];
+
+        for test in tests.into_iter().flatten() {
+            let result = csaf.run_test(test);
+
+            if let TestResultStatus::Failure {
+                errors,
+                warnings,
+                infos,
+            } = result.status
+            {
+                add(&mut results, errors);
+                add(&mut results, warnings);
+                add(&mut results, infos);
+            }
+        }
+
+        Ok(results)
+    }
+}
+
+#[async_trait(?Send)]
+impl Check for CsafValidation {
+    async fn check(&self, csaf: &Csaf) -> anyhow::Result<Vec<CheckError>> {
+        match csaf {
+            Csaf::V2_0(csaf) => self.validate(csaf),
+            Csaf::V2_1(csaf) => self.validate(csaf),
+        }
+    }
+}

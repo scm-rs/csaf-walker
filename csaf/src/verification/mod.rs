@@ -273,8 +273,8 @@ where
                 Ok(result) => result,
                 Err(error) => return Err(VerificationError::Check { error, advisory }),
             };
-            if !result.is_empty() {
-                failures.insert(index.clone(), result);
+            if !result.errors.is_empty() {
+                failures.insert(index.clone(), result.errors);
             } else {
                 successes.insert(index.clone());
             }

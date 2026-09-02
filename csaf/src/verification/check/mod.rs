@@ -25,10 +25,15 @@ pub struct CheckError {
     pub message: Arc<str>,
 }
 
+pub struct CheckResult {
+    pub errors: Vec<CheckError>,
+    pub total: usize,
+}
+
 #[async_trait(?Send)]
 pub trait Check {
     /// Perform a check on a CSAF document
-    async fn check(&self, csaf: &Csaf) -> anyhow::Result<Vec<CheckError>>;
+    async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult>;
 }
 
 /// Implementation to allow a simple function style check
@@ -37,8 +42,10 @@ impl<F> Check for F
 where
     F: Fn(&Csaf) -> Vec<CheckError>,
 {
-    async fn check(&self, csaf: &Csaf) -> anyhow::Result<Vec<CheckError>> {
-        Ok((self)(csaf))
+    async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
+        let errors = (self)(csaf);
+        let total = errors.len();
+        Ok(CheckResult { errors, total })
     }
 }
 
@@ -113,7 +120,7 @@ impl CsafValidation {
         }
     }
 
-    fn validate<V>(&self, csaf: &V) -> anyhow::Result<Vec<CheckError>>
+    fn validate<V>(&self, csaf: &V) -> anyhow::Result<CheckResult>
     where
         V: Validatable,
     {
@@ -137,6 +144,7 @@ impl CsafValidation {
         let tests = V::tests_in_preset(self.preset);
         let cap = self.max_issues_per_test;
         let mut results = vec![];
+        let mut grand_total = 0usize;
 
         for test in tests.into_iter().flatten() {
             let result = csaf.run_test(test);
@@ -148,6 +156,7 @@ impl CsafValidation {
             } = result.status
             {
                 let total = errors.len() + warnings.len() + infos.len();
+                grand_total += total;
                 let mut remaining = if cap == 0 { usize::MAX } else { cap };
                 let intern = |s: &str| self.intern(s);
 
@@ -166,13 +175,16 @@ impl CsafValidation {
             }
         }
 
-        Ok(results)
+        Ok(CheckResult {
+            errors: results,
+            total: grand_total,
+        })
     }
 }
 
 #[async_trait(?Send)]
 impl Check for CsafValidation {
-    async fn check(&self, csaf: &Csaf) -> anyhow::Result<Vec<CheckError>> {
+    async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
         match csaf {
             Csaf::V2_0(csaf) => self.validate(csaf),
             Csaf::V2_1(csaf) => self.validate(csaf),

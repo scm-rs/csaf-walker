@@ -3,7 +3,7 @@ use csaf_walker::verification::{
     check::{CsafValidation, Check, DEFAULT_MAX_ISSUES_PER_TEST},
 };
 use std::path::PathBuf;
-use walker_common::{cli::CommandDefaults, progress::Progress};
+use walker_common::{cli::CommandDefaults, locale::Formatted, progress::Progress};
 
 /// Validate a CSAF document
 #[derive(clap::Args, Debug)]
@@ -32,19 +32,29 @@ impl Validate {
         let preset: &'static str = Box::leak(self.preset.into_boxed_str());
         let check = CsafValidation::new(preset)
             .with_max_issues_per_test(self.max_issues_per_test);
-        let errors = check.check(&csaf).await?;
+        let result = check.check(&csaf).await?;
 
         let filename = self.file.display();
+        let shown = result.errors.len();
+        let total = result.total;
 
-        if errors.is_empty() {
-            println!("# Validation: {filename}\n");
-            println!("**Preset:** {preset}\n");
-            println!("No issues found.");
+        println!("# Validation: {filename}\n");
+        println!("**Preset:** {preset}  ");
+
+        if total == 0 {
+            println!("\nNo issues found.");
+        } else if shown == total {
+            println!("**Issues:** {}\n", Formatted(total));
+            for error in &result.errors {
+                println!("- {}", error.message);
+            }
         } else {
-            println!("# Validation: {filename}\n");
-            println!("**Preset:** {preset}  ");
-            println!("**Issues:** {}\n", errors.len());
-            for error in &errors {
+            println!(
+                "**Issues:** {} ({} shown)\n",
+                Formatted(total),
+                Formatted(shown)
+            );
+            for error in &result.errors {
                 println!("- {}", error.message);
             }
         }

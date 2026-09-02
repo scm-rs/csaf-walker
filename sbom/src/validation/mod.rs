@@ -114,7 +114,7 @@ where
 
 enum ValidationProcessError<S: Source> {
     /// Failed, but passing on to visitor
-    Proceed(ValidationError<S>),
+    Proceed(Box<ValidationError<S>>),
     /// Failed, aborting processing
     #[allow(unused)]
     Abort(anyhow::Error),
@@ -158,22 +158,22 @@ where
         retrieved: RetrievedSbom,
     ) -> Result<ValidatedSbom, ValidationProcessError<S>> {
         if let Err((expected, actual)) = validate_digest(&retrieved.sha256) {
-            return Err(ValidationProcessError::Proceed(
+            return Err(ValidationProcessError::Proceed(Box::new(
                 ValidationError::DigestMismatch {
                     expected,
                     actual,
                     retrieved,
                 },
-            ));
+            )));
         }
         if let Err((expected, actual)) = validate_digest(&retrieved.sha512) {
-            return Err(ValidationProcessError::Proceed(
+            return Err(ValidationProcessError::Proceed(Box::new(
                 ValidationError::DigestMismatch {
                     expected,
                     actual,
                     retrieved,
                 },
-            ));
+            )));
         }
 
         if let Some(signature) = &retrieved.signature {
@@ -184,9 +184,9 @@ where
                 &retrieved.data,
             ) {
                 Ok(()) => Ok(ValidatedSbom { retrieved }),
-                Err(error) => Err(ValidationProcessError::Proceed(
+                Err(error) => Err(ValidationProcessError::Proceed(Box::new(
                     ValidationError::Signature { error, retrieved },
-                )),
+                ))),
             }
         } else {
             Ok(ValidatedSbom { retrieved })
@@ -231,7 +231,7 @@ where
             Ok(advisory) => {
                 let result = match self.validate(context, advisory).await {
                     Ok(result) => Ok(result),
-                    Err(ValidationProcessError::Proceed(err)) => Err(err),
+                    Err(ValidationProcessError::Proceed(err)) => Err(*err),
                     Err(ValidationProcessError::Abort(err)) => return Err(Error::Validation(err)),
                 };
                 self.visitor

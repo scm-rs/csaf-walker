@@ -2,14 +2,16 @@ use crate::{
     cmd::{DiscoverArguments, FilterArguments, VerificationArguments},
     common::walk_visitor,
 };
-use csaf_walker::verification::check::CsafValidation;
 use csaf_walker::{
     discover::AsDiscovered,
     report::{DocumentKey, Duplicates, ReportRenderOption, ReportResult, render_to_html},
     retrieve::RetrievingVisitor,
     source::DispatchSource,
     validation::{ValidatedAdvisory, ValidationError, ValidationVisitor},
-    verification::{VerificationError, VerifiedAdvisory, VerifyingVisitor, check::CheckError},
+    verification::{
+        VerificationError, VerifiedAdvisory, VerifyingVisitor,
+        check::{CheckError, CsafValidation},
+    },
     visitors::duplicates::DetectDuplicatesVisitor,
 };
 use reqwest::Url;
@@ -140,10 +142,10 @@ impl Report {
 
             // content checks
 
-            let visitor = VerifyingVisitor::with_checks(
-                visitor,
-                vec![("csaf", Box::new(CsafValidation("full")))],
-            );
+            let check = CsafValidation::new("full")
+                .with_max_issues_per_test(self.verification.max_issues_per_test);
+            let visitor =
+                VerifyingVisitor::with_checks(visitor, vec![("csaf", Box::new(check))]);
 
             // validation (can we work with this document?)
 

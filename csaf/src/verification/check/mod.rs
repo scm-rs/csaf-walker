@@ -1,11 +1,12 @@
 use crate::verification::Csaf;
 use async_trait::async_trait;
 use csaf::validation::{TestResultStatus, Validatable, ValidationError};
-use std::borrow::Cow;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CheckError {
-    pub message: Cow<'static, str>,
+    pub message: Arc<str>,
 }
 
 #[async_trait(?Send)]
@@ -47,23 +48,78 @@ impl Checking {
     }
 }
 
-pub struct CsafValidation(pub &'static str);
+impl From<&str> for CheckError {
+    fn from(s: &str) -> Self {
+        CheckError {
+            message: Arc::from(s),
+        }
+    }
+}
+
+impl From<String> for CheckError {
+    fn from(s: String) -> Self {
+        CheckError {
+            message: Arc::from(s.as_str()),
+        }
+    }
+}
+
+pub const DEFAULT_MAX_ISSUES_PER_TEST: usize = 25;
+
+pub struct CsafValidation {
+    pub preset: &'static str,
+    pub max_issues_per_test: usize,
+    interned: Mutex<HashSet<Arc<str>>>,
+}
 
 impl CsafValidation {
+    pub fn new(preset: &'static str) -> Self {
+        Self {
+            preset,
+            max_issues_per_test: DEFAULT_MAX_ISSUES_PER_TEST,
+            interned: Mutex::new(HashSet::new()),
+        }
+    }
+
+    pub fn with_max_issues_per_test(mut self, max: usize) -> Self {
+        self.max_issues_per_test = max;
+        self
+    }
+
+    fn intern(&self, s: &str) -> Arc<str> {
+        let mut pool = self.interned.lock().unwrap();
+        if let Some(existing) = pool.get(s) {
+            existing.clone()
+        } else {
+            let arc: Arc<str> = Arc::from(s);
+            pool.insert(arc.clone());
+            arc
+        }
+    }
+
     fn validate<V>(&self, csaf: &V) -> anyhow::Result<Vec<CheckError>>
     where
         V: Validatable,
     {
-        fn add(result: &mut Vec<CheckError>, errors: Vec<ValidationError>) {
+        fn collect(
+            result: &mut Vec<CheckError>,
+            errors: Vec<ValidationError>,
+            remaining: &mut usize,
+            intern: &dyn Fn(&str) -> Arc<str>,
+        ) {
             for error in errors {
+                if *remaining == 0 {
+                    return;
+                }
+                *remaining -= 1;
                 result.push(CheckError {
-                    message: error.message.into(),
+                    message: intern(&error.message),
                 });
             }
         }
 
-        let tests = V::tests_in_preset(self.0);
-
+        let tests = V::tests_in_preset(self.preset);
+        let cap = self.max_issues_per_test;
         let mut results = vec![];
 
         for test in tests.into_iter().flatten() {
@@ -75,9 +131,22 @@ impl CsafValidation {
                 infos,
             } = result.status
             {
-                add(&mut results, errors);
-                add(&mut results, warnings);
-                add(&mut results, infos);
+                let total = errors.len() + warnings.len() + infos.len();
+                let mut remaining = if cap == 0 { usize::MAX } else { cap };
+                let intern = |s: &str| self.intern(s);
+
+                collect(&mut results, errors, &mut remaining, &intern);
+                collect(&mut results, warnings, &mut remaining, &intern);
+                collect(&mut results, infos, &mut remaining, &intern);
+
+                if cap > 0 && total > cap {
+                    results.push(CheckError {
+                        message: self.intern(&format!(
+                            "Test {test}: threshold of {cap} reached, {} issues omitted",
+                            total - cap,
+                        )),
+                    });
+                }
             }
         }
 

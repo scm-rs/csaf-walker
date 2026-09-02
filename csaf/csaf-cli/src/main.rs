@@ -6,7 +6,7 @@ mod common;
 use clap::Parser;
 use cmd::{
     discover::Discover, download::Download, fetch::Fetch, metadata::Metadata, parse::Parse,
-    report::Report, scan::Scan, scoop::Scoop, send::Send, sync::Sync,
+    report::Report, scan::Scan, scoop::Scoop, send::Send, sync::Sync, validate::Validate,
 };
 use std::{ops::Deref, process::ExitCode};
 use walker_common::{
@@ -36,6 +36,7 @@ enum Command {
     Send(Send),
     Metadata(Metadata),
     Scoop(Scoop),
+    Validate(Validate),
 }
 
 impl Deref for Command {
@@ -53,6 +54,7 @@ impl Deref for Command {
             Self::Send(cmd) => cmd,
             Self::Metadata(cmd) => cmd,
             Self::Scoop(cmd) => cmd,
+            Self::Validate(cmd) => cmd,
         }
     }
 }
@@ -70,6 +72,7 @@ impl Command {
             Self::Send(cmd) => cmd.run(progress).await,
             Self::Metadata(cmd) => cmd.run().await,
             Self::Scoop(cmd) => cmd.run(progress).await,
+            Self::Validate(cmd) => cmd.run(progress).await,
         }
     }
 }

@@ -1,11 +1,27 @@
 use crate::verification::Csaf;
 use async_trait::async_trait;
 use csaf::validation::{TestResultStatus, Validatable, ValidationError};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone)]
+mod arc_str_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::sync::Arc;
+
+    pub fn serialize<S: Serializer>(value: &Arc<str>, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(value)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Arc<str>, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Ok(Arc::from(s.as_str()))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckError {
+    #[serde(with = "arc_str_serde")]
     pub message: Arc<str>,
 }
 

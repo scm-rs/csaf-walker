@@ -43,6 +43,7 @@ walkdir = { workspace = true }
 
 # optional
 csaf-rs = { workspace = true, optional = true }
+tempfile = { workspace = true }
 
 # internal
 walker-common = { workspace = true, features = ["openpgp"] }

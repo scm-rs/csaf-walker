@@ -4,7 +4,10 @@ use crate::{
 };
 use csaf_walker::{
     discover::AsDiscovered,
-    report::{DocumentKey, Duplicates, ReportRenderOption, ReportResult, render_to_html},
+    report::{
+        DocumentKey, Duplicates, FileBackedCollector, InMemoryCollector, ReportCollector,
+        ReportRenderOption, ReportResult, ReportSeverity, ReportView, render_to_html,
+    },
     retrieve::RetrievingVisitor,
     source::DispatchSource,
     validation::{ValidatedAdvisory, ValidationError, ValidationVisitor},
@@ -16,7 +19,6 @@ use csaf_walker::{
 };
 use reqwest::Url;
 use std::{
-    collections::BTreeMap,
     path::PathBuf,
     sync::{
         Arc,
@@ -62,6 +64,14 @@ pub struct Report {
 
 impl CommandDefaults for Report {}
 
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum ReportStorageMode {
+    /// Keep report data in memory (fast, higher memory usage)
+    Memory,
+    /// Spill report data to a temp file (lower memory during walk, slower)
+    File,
+}
+
 #[derive(clap::Args, Debug)]
 #[command(next_help_heading = "Report rendering")]
 pub struct RenderOptions {
@@ -80,22 +90,41 @@ pub struct RenderOptions {
     /// Statistics file to append to
     #[arg(long)]
     statistics_file: Option<PathBuf>,
+
+    /// Storage mode for report data during collection.
+    #[arg(long, default_value = "memory")]
+    pub report_storage: ReportStorageMode,
 }
 
 impl Report {
-    pub async fn run<P: Progress>(self, progress: P) -> anyhow::Result<()> {
+    pub async fn run<P: Progress + Clone>(self, progress: P) -> anyhow::Result<()> {
+        match self.render.report_storage {
+            ReportStorageMode::Memory => {
+                self.run_with_collector(progress, InMemoryCollector::new())
+                    .await
+            }
+            ReportStorageMode::File => {
+                self.run_with_collector(progress, FileBackedCollector::new()?)
+                    .await
+            }
+        }
+    }
+
+    async fn run_with_collector<P, C>(self, progress: P, collector: C) -> anyhow::Result<()>
+    where
+        P: Progress,
+        C: ReportCollector + 'static,
+    {
         let options: ValidationOptions = self.validation.into();
 
         let total = Arc::new(AtomicUsize::default());
         let duplicates: Arc<Mutex<Duplicates>> = Default::default();
-        let errors: Arc<Mutex<BTreeMap<DocumentKey, String>>> = Default::default();
-        let warnings: Arc<Mutex<BTreeMap<DocumentKey, Vec<CheckError>>>> = Default::default();
+        let collector: Arc<Mutex<C>> = Arc::new(Mutex::new(collector));
 
         {
             let total = total.clone();
             let duplicates = duplicates.clone();
-            let errors = errors.clone();
-            let warnings = warnings.clone();
+            let collector = collector.clone();
 
             let visitor = move |advisory: Result<
                 VerifiedAdvisory<ValidatedAdvisory, &'static str>,
@@ -103,8 +132,7 @@ impl Report {
             >| {
                 (*total).fetch_add(1, Ordering::Release);
 
-                let errors = errors.clone();
-                let warnings = warnings.clone();
+                let collector = collector.clone();
 
                 async move {
                     let adv = match advisory {
@@ -121,19 +149,23 @@ impl Report {
                                 },
                             };
 
-                            errors.lock().await.insert(name, err.to_string());
+                            collector.lock().await.insert(
+                                name,
+                                ReportSeverity::Error,
+                                vec![CheckError::from(err.to_string())],
+                            )?;
                             return Ok::<_, anyhow::Error>(());
                         }
                     };
 
                     if !adv.failures.is_empty() {
                         let name = DocumentKey::for_document(&adv);
-                        warnings
+                        let checks: Vec<CheckError> =
+                            adv.failures.into_values().flatten().collect();
+                        collector
                             .lock()
                             .await
-                            .entry(name)
-                            .or_default()
-                            .extend(adv.failures.into_values().flatten());
+                            .insert(name, ReportSeverity::Warning, checks)?;
                     }
 
                     Ok::<_, anyhow::Error>(())
@@ -170,16 +202,18 @@ impl Report {
         }
 
         let total = (*total).load(Ordering::Acquire);
-        let errors = errors.lock().await;
-        let warnings = warnings.lock().await;
 
-        Self::render(
+        let collector = Arc::try_unwrap(collector)
+            .map_err(|_| anyhow::anyhow!("collector still has outstanding references"))?
+            .into_inner();
+        let view = collector.into_view()?;
+
+        Self::render_report(
             &self.render,
             &ReportResult {
                 total,
                 duplicates: &*duplicates.lock().await,
-                errors: &errors,
-                warnings: &warnings,
+                view: &view,
             },
         )?;
 
@@ -187,17 +221,17 @@ impl Report {
             self.render.statistics_file.as_deref(),
             Statistics {
                 total,
-                errors: errors.len(),
-                total_errors: errors.len(),
-                warnings: warnings.len(),
-                total_warnings: warnings.values().map(|v| v.len()).sum(),
+                errors: view.count(&ReportSeverity::Error),
+                total_errors: view.total(&ReportSeverity::Error),
+                warnings: view.count(&ReportSeverity::Warning),
+                total_warnings: view.total(&ReportSeverity::Warning),
             },
         )?;
 
         Ok(())
     }
 
-    fn render(render: &RenderOptions, report: &ReportResult) -> anyhow::Result<()> {
+    fn render_report(render: &RenderOptions, report: &ReportResult) -> anyhow::Result<()> {
         let mut out = std::fs::File::create(&render.output)?;
 
         render_to_html(

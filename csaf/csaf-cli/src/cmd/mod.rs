@@ -14,6 +14,7 @@ pub mod scan;
 pub mod scoop;
 pub mod send;
 pub mod sync;
+pub mod validate;
 
 #[derive(Debug, clap::Parser)]
 #[command(next_help_heading = "Discovery")]
@@ -113,4 +114,8 @@ pub struct SkipArguments {
 
 #[derive(Debug, clap::Parser)]
 #[command(next_help_heading = "Checks")]
-pub struct VerificationArguments {}
+pub struct VerificationArguments {
+    /// Maximum number of issues reported per validation test. Use 0 for unlimited.
+    #[arg(long, default_value_t = csaf_walker::verification::check::DEFAULT_MAX_ISSUES_PER_TEST)]
+    pub max_issues_per_test: usize,
+}

@@ -115,7 +115,7 @@ impl FileSource {
             .url()
             .clone()
             .to_file_path()
-            .map_err(|()| anyhow!("Failed to convert into path: {:?}", &context.url()))?;
+            .map_err(|()| anyhow!("Failed to convert into path: {:?}", context.url()))?;
 
         tokio::task::spawn_blocking(move || {
             for entry in WalkDir::new(path).into_iter().filter_entry(|entry| {

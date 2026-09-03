@@ -42,7 +42,8 @@ url = { workspace = true, features = ["serde"] }
 walkdir = { workspace = true }
 
 # optional
-csaf = { workspace = true, optional = true }
+csaf-rs = { workspace = true, optional = true }
+tempfile = { workspace = true }
 
 # internal
 walker-common = { workspace = true, features = ["openpgp"] }
@@ -62,6 +63,8 @@ crypto-nettle = ["sequoia-openpgp/crypto-nettle"]
 crypto-openssl = ["sequoia-openpgp/crypto-openssl"]
 crypto-botan = ["sequoia-openpgp/crypto-botan"]
 crypto-rust = ["sequoia-openpgp/crypto-rust"]
+
+csaf = ["dep:csaf-rs"]
 
 # enable for semver checks (in addition to default)
 _semver = []

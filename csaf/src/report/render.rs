@@ -1,4 +1,4 @@
-use crate::report::{DocumentKey, ReportResult};
+use crate::report::{DocumentKey, ReportResult, ReportSeverity};
 use std::{
     fmt::{Display, Formatter},
     path::Path,
@@ -98,29 +98,33 @@ impl HtmlReport<'_> {
     }
 
     fn render_errors(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let count = self.result.errors.len();
+        let count = self.result.view.count(&ReportSeverity::Error);
 
         let data = |f: &mut Formatter<'_>| {
-            for (k, v) in self.result.errors {
-                let (url, label) = self.link_document(k);
+            self.result
+                .view
+                .for_each(&ReportSeverity::Error, &mut |k, messages| {
+                    let (url, label) = self.link_document(k);
 
-                let id = format!("error-{url}");
-                let id = html_escape::encode_quoted_attribute(&id);
+                    let id = format!("error-{url}");
+                    let id = html_escape::encode_quoted_attribute(&id);
 
-                writeln!(
-                    f,
-                    r##"
+                    for msg in messages {
+                        writeln!(
+                            f,
+                            r##"
             <tr>
                 <td id="{id}"><a href="{url}" target="_blank" style="white-space: nowrap;">{label}</a> <a class="link-secondary" href="#{id}">§</a></td>
                 <td><code>{v}</code></td>
             </tr>
             "##,
-                    url = html_escape::encode_quoted_attribute(&url),
-                    label = html_escape::encode_text(&label),
-                    v = html_escape::encode_text(&v),
-                )?;
-            }
-            Ok(())
+                            url = html_escape::encode_quoted_attribute(&url),
+                            label = html_escape::encode_text(&label),
+                            v = html_escape::encode_text(&msg.message),
+                        )?;
+                    }
+                    Ok(())
+                })
         };
         if count > 0 {
             Self::render_table(
@@ -168,50 +172,52 @@ impl HtmlReport<'_> {
     }
 
     fn render_warnings(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let file_count = self.result.warnings.len();
-        let total_count = self.result.warnings.values().map(|w| w.len()).sum();
+        let file_count = self.result.view.count(&ReportSeverity::Warning);
+        let total_count = self.result.view.total(&ReportSeverity::Warning);
 
         let data = |f: &mut Formatter<'_>| {
-            for (k, v) in self.result.warnings {
-                let (url, label) = self.link_document(k);
+            self.result
+                .view
+                .for_each(&ReportSeverity::Warning, &mut |k, messages| {
+                    let (url, label) = self.link_document(k);
 
-                let id = format!("warning-{url}");
-                let id = html_escape::encode_quoted_attribute(&id);
+                    let id = format!("warning-{url}");
+                    let id = html_escape::encode_quoted_attribute(&id);
 
-                writeln!(
-                    f,
-                    r##"
+                    writeln!(
+                        f,
+                        r##"
             <tr>
                 <td id="{id}"><a href="{url}" target="_blank" style="white-space: nowrap;">{label}</a> <a class="link-secondary" href="#{id}">§</a></td>
                 <td><ul>
 "##,
-                    url = html_escape::encode_quoted_attribute(&url),
-                    label = html_escape::encode_text(&label),
-                )?;
+                        url = html_escape::encode_quoted_attribute(&url),
+                        label = html_escape::encode_text(&label),
+                    )?;
 
-                for text in v {
+                    for text in messages {
+                        writeln!(
+                            f,
+                            r#"
+            <li>
+                <code>[{id}] {v}</code>
+            </li>
+            "#,
+                            id = html_escape::encode_text(&text.id),
+                            v = html_escape::encode_text(&text.message),
+                        )?;
+                    }
+
                     writeln!(
                         f,
                         r#"
-            <li>
-                <code>{v}</code>
-            </li>
-            "#,
-                        v = html_escape::encode_text(&text),
-                    )?;
-                }
-
-                writeln!(
-                    f,
-                    r#"
                     </ul>
                 </td>
             </tr>
 "#
-                )?;
-            }
-
-            Ok(())
+                    )?;
+                    Ok(())
+                })
         };
         if total_count > 0 {
             Self::render_table(
@@ -307,16 +313,17 @@ impl Display for HtmlReport<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::report::InMemoryView;
     use reqwest::Url;
     use std::path::PathBuf;
 
     #[test]
     fn test_link() {
+        let view = InMemoryView::new();
         let details = ReportResult {
             total: 0,
             duplicates: &Default::default(),
-            errors: &Default::default(),
-            warnings: &Default::default(),
+            view: &view,
         };
         let _output = PathBuf::default();
         let base_url = Some(Url::parse("file:///foo/bar/").expect("example value must parse"));

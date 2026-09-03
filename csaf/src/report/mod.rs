@@ -1,11 +1,9 @@
 //! Reporting functionality
 
 mod collector;
-mod file_collector;
 mod render;
 
 pub use collector::*;
-pub use file_collector::*;
 pub use render::*;
 
 use crate::{check::CheckError, discover::DiscoveredAdvisory};

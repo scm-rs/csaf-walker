@@ -1,9 +1,11 @@
-use super::{DocumentKey, ReportCollector, ReportSeverity, ReportView};
+use super::super::{DocumentKey, ReportCollector, ReportSeverity, ReportView};
 use crate::check::CheckError;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fmt;
-use std::io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write},
+};
 
 #[derive(Serialize, Deserialize)]
 struct Record {

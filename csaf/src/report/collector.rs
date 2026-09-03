@@ -114,6 +114,7 @@ mod test {
 
     fn check(msg: &str) -> CheckError {
         CheckError {
+            id: Arc::from("test"),
             message: Arc::from(msg),
         }
     }

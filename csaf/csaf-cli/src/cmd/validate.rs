@@ -45,7 +45,7 @@ impl Validate {
         } else if shown == total {
             println!("**Issues:** {}\n", Formatted(total));
             for error in &result.errors {
-                println!("- {}", error.message);
+                println!("- [{}] {}", error.id, error.message);
             }
         } else {
             println!(
@@ -54,7 +54,7 @@ impl Validate {
                 Formatted(shown)
             );
             for error in &result.errors {
-                println!("- {}", error.message);
+                println!("- [{}] {}", error.id, error.message);
             }
         }
 

@@ -200,9 +200,10 @@ impl HtmlReport<'_> {
                             f,
                             r#"
             <li>
-                <code>{v}</code>
+                <code>[{id}] {v}</code>
             </li>
             "#,
+                            id = html_escape::encode_text(&text.id),
                             v = html_escape::encode_text(&text.message),
                         )?;
                     }

@@ -22,6 +22,8 @@ mod arc_str_serde {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckError {
     #[serde(with = "arc_str_serde")]
+    pub id: Arc<str>,
+    #[serde(with = "arc_str_serde")]
     pub message: Arc<str>,
 }
 
@@ -74,6 +76,7 @@ impl Checking {
 impl From<&str> for CheckError {
     fn from(s: &str) -> Self {
         CheckError {
+            id: Arc::from(""),
             message: Arc::from(s),
         }
     }
@@ -82,6 +85,7 @@ impl From<&str> for CheckError {
 impl From<String> for CheckError {
     fn from(s: String) -> Self {
         CheckError {
+            id: Arc::from(""),
             message: Arc::from(s.as_str()),
         }
     }
@@ -128,6 +132,7 @@ impl CsafValidation {
             result: &mut Vec<CheckError>,
             errors: Vec<ValidationError>,
             remaining: &mut usize,
+            id: &Arc<str>,
             intern: &dyn Fn(&str) -> Arc<str>,
         ) {
             for error in errors {
@@ -136,6 +141,7 @@ impl CsafValidation {
                 }
                 *remaining -= 1;
                 result.push(CheckError {
+                    id: Arc::clone(id),
                     message: intern(&error.message),
                 });
             }
@@ -159,15 +165,17 @@ impl CsafValidation {
                 grand_total += total;
                 let mut remaining = if cap == 0 { usize::MAX } else { cap };
                 let intern = |s: &str| self.intern(s);
+                let id = self.intern(test);
 
-                collect(&mut results, errors, &mut remaining, &intern);
-                collect(&mut results, warnings, &mut remaining, &intern);
-                collect(&mut results, infos, &mut remaining, &intern);
+                collect(&mut results, errors, &mut remaining, &id, &intern);
+                collect(&mut results, warnings, &mut remaining, &id, &intern);
+                collect(&mut results, infos, &mut remaining, &id, &intern);
 
                 if cap > 0 && total > cap {
                     results.push(CheckError {
+                        id: Arc::clone(&id),
                         message: self.intern(&format!(
-                            "Test {test}: threshold of {cap} reached, {} issues omitted",
+                            "threshold of {cap} reached, {} issues omitted",
                             total - cap,
                         )),
                     });

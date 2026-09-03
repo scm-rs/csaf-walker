@@ -176,8 +176,7 @@ impl Report {
 
             let check = CsafValidation::new("full")
                 .with_max_issues_per_test(self.verification.max_issues_per_test);
-            let visitor =
-                VerifyingVisitor::with_checks(visitor, vec![("csaf", Box::new(check))]);
+            let visitor = VerifyingVisitor::with_checks(visitor, vec![("csaf", Box::new(check))]);
 
             // validation (can we work with this document?)
 

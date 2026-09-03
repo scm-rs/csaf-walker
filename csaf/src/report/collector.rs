@@ -97,7 +97,9 @@ impl ReportCollector for InMemoryCollector {
 
 #[cfg(test)]
 mod test {
-    use super::super::{DocumentKey, FileBackedCollector, ReportCollector, ReportSeverity, ReportView};
+    use super::super::{
+        DocumentKey, FileBackedCollector, ReportCollector, ReportSeverity, ReportView,
+    };
     use super::InMemoryCollector;
     use crate::verification::check::CheckError;
     use std::sync::Arc;
@@ -125,35 +127,19 @@ mod test {
             )
             .unwrap();
         collector
-            .insert(
-                key("a.json"),
-                ReportSeverity::Warning,
-                vec![check("warn3")],
-            )
+            .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")])
             .unwrap();
         // append more warnings to b.json
         collector
-            .insert(
-                key("b.json"),
-                ReportSeverity::Warning,
-                vec![check("warn4")],
-            )
+            .insert(key("b.json"), ReportSeverity::Warning, vec![check("warn4")])
             .unwrap();
 
         collector
-            .insert(
-                key("c.json"),
-                ReportSeverity::Error,
-                vec![check("err1")],
-            )
+            .insert(key("c.json"), ReportSeverity::Error, vec![check("err1")])
             .unwrap();
         // overwrite error for c.json
         collector
-            .insert(
-                key("c.json"),
-                ReportSeverity::Error,
-                vec![check("err2")],
-            )
+            .insert(key("c.json"), ReportSeverity::Error, vec![check("err2")])
             .unwrap();
 
         // empty insert should be a no-op
@@ -177,7 +163,9 @@ mod test {
         view.for_each(&ReportSeverity::Warning, &mut |k, msgs| {
             warning_keys.push(k.url.clone());
             warning_messages.push(
-                msgs.iter().map(|m| m.message.to_string()).collect::<Vec<_>>(),
+                msgs.iter()
+                    .map(|m| m.message.to_string())
+                    .collect::<Vec<_>>(),
             );
             Ok(())
         })
@@ -191,7 +179,9 @@ mod test {
         let mut error_messages = Vec::new();
         view.for_each(&ReportSeverity::Error, &mut |_k, msgs| {
             error_messages.push(
-                msgs.iter().map(|m| m.message.to_string()).collect::<Vec<_>>(),
+                msgs.iter()
+                    .map(|m| m.message.to_string())
+                    .collect::<Vec<_>>(),
             );
             Ok(())
         })

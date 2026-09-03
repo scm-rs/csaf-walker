@@ -8,6 +8,12 @@ pub struct InMemoryView {
     warnings: BTreeMap<DocumentKey, Vec<CheckError>>,
 }
 
+impl Default for InMemoryView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryView {
     pub fn new() -> Self {
         Self {

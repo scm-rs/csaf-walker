@@ -1,9 +1,9 @@
 use crate::verification::Csaf;
 use async_trait::async_trait;
 use csaf::validation::{TestResultStatus, Validatable, ValidationError};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::{collections::HashSet, sync::Arc};
 
 mod arc_str_serde {
     use serde::{Deserialize, Deserializer, Serializer};
@@ -114,7 +114,7 @@ impl CsafValidation {
     }
 
     fn intern(&self, s: &str) -> Arc<str> {
-        let mut pool = self.interned.lock().unwrap();
+        let mut pool = self.interned.lock();
         if let Some(existing) = pool.get(s) {
             existing.clone()
         } else {

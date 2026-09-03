@@ -8,8 +8,7 @@ pub use collector::*;
 pub use file_collector::*;
 pub use render::*;
 
-use crate::discover::DiscoveredAdvisory;
-use crate::verification::check::CheckError;
+use crate::{check::CheckError, discover::DiscoveredAdvisory};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;

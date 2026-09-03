@@ -1,5 +1,5 @@
 use super::{DocumentKey, ReportCollector, ReportSeverity, ReportView};
-use crate::verification::check::CheckError;
+use crate::check::CheckError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;

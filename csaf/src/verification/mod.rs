@@ -3,11 +3,12 @@
 //! Checks to ensure conformity with the specification.
 
 use crate::{
+    check::CheckError,
     discover::{AsDiscovered, DiscoveredAdvisory},
     retrieve::{AsRetrieved, RetrievalContext, RetrievedAdvisory, RetrievedVisitor},
     source::Source,
     validation::{ValidatedAdvisory, ValidatedVisitor, ValidationContext, ValidationError},
-    verification::check::{Check, CheckError},
+    verification::check::Check,
 };
 use csaf::json::JsonSource;
 use serde::de::Error as _;

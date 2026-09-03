@@ -1,5 +1,5 @@
 use super::{DocumentKey, ReportCollector, ReportSeverity, ReportView};
-use crate::verification::check::CheckError;
+use crate::check::CheckError;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -107,7 +107,7 @@ mod test {
         DocumentKey, FileBackedCollector, ReportCollector, ReportSeverity, ReportView,
     };
     use super::InMemoryCollector;
-    use crate::verification::check::CheckError;
+    use crate::check::CheckError;
     use std::sync::Arc;
     use url::Url;
 

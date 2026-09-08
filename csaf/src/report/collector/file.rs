@@ -2,25 +2,34 @@ use super::super::{DocumentKey, ReportCollector, ReportSeverity, ReportView};
 use crate::check::CheckError;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
     fmt,
     io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write},
 };
 
 #[derive(Serialize, Deserialize)]
 struct Record {
+    key: DocumentKey,
+    severity: ReportSeverity,
     messages: Vec<CheckError>,
 }
 
-struct IndexEntry {
-    offsets: Vec<u64>,
-    total: usize,
-}
-
+/// File-backed report collector.
+///
+/// Writes report data to an anonymous temp file during collection, keeping
+/// memory usage low. The file is automatically cleaned up when dropped.
+///
+/// Compared to [`super::InMemoryCollector`], this collector has the following
+/// limitations:
+///
+/// - Output is not sorted by document key
+/// - Warnings for the same document may appear in separate entries
+/// - Error overwrites for the same key are not applied
 pub struct FileBackedCollector {
     writer: BufWriter<std::fs::File>,
-    error_index: BTreeMap<DocumentKey, IndexEntry>,
-    warning_index: BTreeMap<DocumentKey, IndexEntry>,
+    error_count: usize,
+    error_total: usize,
+    warning_count: usize,
+    warning_total: usize,
 }
 
 impl FileBackedCollector {
@@ -28,16 +37,11 @@ impl FileBackedCollector {
         let file = tempfile::tempfile()?;
         Ok(Self {
             writer: BufWriter::new(file),
-            error_index: BTreeMap::new(),
-            warning_index: BTreeMap::new(),
+            error_count: 0,
+            error_total: 0,
+            warning_count: 0,
+            warning_total: 0,
         })
-    }
-
-    fn index_for(&mut self, severity: &ReportSeverity) -> &mut BTreeMap<DocumentKey, IndexEntry> {
-        match severity {
-            ReportSeverity::Error => &mut self.error_index,
-            ReportSeverity::Warning => &mut self.warning_index,
-        }
     }
 }
 
@@ -54,77 +58,65 @@ impl ReportCollector for FileBackedCollector {
             return Ok(());
         }
 
-        let offset = self.writer.stream_position()?;
         let count = messages.len();
+        match severity {
+            ReportSeverity::Error => {
+                self.error_count += 1;
+                self.error_total += count;
+            }
+            ReportSeverity::Warning => {
+                self.warning_count += 1;
+                self.warning_total += count;
+            }
+        }
 
-        let record = Record { messages };
+        let record = Record {
+            key,
+            severity,
+            messages,
+        };
         serde_json::to_writer(&mut self.writer, &record)?;
         writeln!(&mut self.writer)?;
-
-        let index = self.index_for(&severity);
-        if matches!(severity, ReportSeverity::Error) {
-            let entry = index.entry(key).or_insert_with(|| IndexEntry {
-                offsets: Vec::new(),
-                total: 0,
-            });
-            entry.offsets.clear();
-            entry.total = count;
-            entry.offsets.push(offset);
-        } else {
-            let entry = index.entry(key).or_insert_with(|| IndexEntry {
-                offsets: Vec::new(),
-                total: 0,
-            });
-            entry.total += count;
-            entry.offsets.push(offset);
-        }
 
         Ok(())
     }
 
     fn into_view(mut self) -> anyhow::Result<Self::View> {
         self.writer.flush()?;
-        let file = self.writer.into_inner()?;
+        let mut file = self.writer.into_inner()?;
+        file.seek(SeekFrom::Start(0))?;
 
         Ok(FileBackedView {
             file,
-            error_index: self.error_index,
-            warning_index: self.warning_index,
+            error_count: self.error_count,
+            error_total: self.error_total,
+            warning_count: self.warning_count,
+            warning_total: self.warning_total,
         })
     }
 }
 
 pub struct FileBackedView {
     file: std::fs::File,
-    error_index: BTreeMap<DocumentKey, IndexEntry>,
-    warning_index: BTreeMap<DocumentKey, IndexEntry>,
-}
-
-impl FileBackedView {
-    fn index_for(&self, severity: &ReportSeverity) -> &BTreeMap<DocumentKey, IndexEntry> {
-        match severity {
-            ReportSeverity::Error => &self.error_index,
-            ReportSeverity::Warning => &self.warning_index,
-        }
-    }
-
-    fn read_record(&self, offset: u64) -> Result<Record, fmt::Error> {
-        let mut file = &self.file;
-        file.seek(SeekFrom::Start(offset)).map_err(|_| fmt::Error)?;
-        let mut reader = BufReader::new(file);
-        let mut line = String::new();
-        reader.read_line(&mut line).map_err(|_| fmt::Error)?;
-        serde_json::from_str(&line).map_err(|_| fmt::Error)
-    }
+    error_count: usize,
+    error_total: usize,
+    warning_count: usize,
+    warning_total: usize,
 }
 
 impl ReportView for FileBackedView {
     fn count(&self, severity: &ReportSeverity) -> usize {
-        self.index_for(severity).len()
+        match severity {
+            ReportSeverity::Error => self.error_count,
+            ReportSeverity::Warning => self.warning_count,
+        }
     }
 
     fn total(&self, severity: &ReportSeverity) -> usize {
-        self.index_for(severity).values().map(|e| e.total).sum()
+        match severity {
+            ReportSeverity::Error => self.error_total,
+            ReportSeverity::Warning => self.warning_total,
+        }
     }
 
     fn for_each(
@@ -132,13 +124,18 @@ impl ReportView for FileBackedView {
         severity: &ReportSeverity,
         f: &mut dyn FnMut(&DocumentKey, &[CheckError]) -> fmt::Result,
     ) -> fmt::Result {
-        for (key, entry) in self.index_for(severity) {
-            let mut all_messages = Vec::with_capacity(entry.total);
-            for &offset in &entry.offsets {
-                let record = self.read_record(offset)?;
-                all_messages.extend(record.messages);
+        let mut file = &self.file;
+        file.seek(SeekFrom::Start(0)).map_err(|_| fmt::Error)?;
+        let reader = BufReader::new(file);
+        for line in reader.lines() {
+            let line = line.map_err(|_| fmt::Error)?;
+            if line.is_empty() {
+                continue;
             }
-            f(key, &all_messages)?;
+            let record: Record = serde_json::from_str(&line).map_err(|_| fmt::Error)?;
+            if &record.severity == severity {
+                f(&record.key, &record.messages)?;
+            }
         }
         Ok(())
     }

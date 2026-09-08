@@ -29,8 +29,8 @@ impl Validate {
         let data = std::fs::read(&self.file)?;
         let csaf = Csaf::parse(&*data)?;
 
-        let preset: &'static str = Box::leak(self.preset.into_boxed_str());
-        let check = CsafValidation::new(preset).with_max_issues_per_test(self.max_issues_per_test);
+        let check =
+            CsafValidation::new(&self.preset).with_max_issues_per_test(self.max_issues_per_test);
         let result = check.check(&csaf).await?;
 
         let filename = self.file.display();
@@ -38,7 +38,7 @@ impl Validate {
         let total = result.total;
 
         println!("# Validation: {filename}\n");
-        println!("**Preset:** {preset}  ");
+        println!("**Preset:** {}  ", self.preset);
 
         if total == 0 {
             println!("\nNo issues found.");

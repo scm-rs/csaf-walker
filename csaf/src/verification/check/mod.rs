@@ -55,15 +55,15 @@ impl Checking {
 pub const DEFAULT_MAX_ISSUES_PER_TEST: usize = 25;
 
 pub struct CsafValidation {
-    pub preset: &'static str,
+    pub preset: String,
     pub max_issues_per_test: usize,
     interned: Mutex<HashSet<Arc<str>>>,
 }
 
 impl CsafValidation {
-    pub fn new(preset: &'static str) -> Self {
+    pub fn new(preset: impl Into<String>) -> Self {
         Self {
-            preset,
+            preset: preset.into(),
             max_issues_per_test: DEFAULT_MAX_ISSUES_PER_TEST,
             interned: Mutex::new(HashSet::new()),
         }
@@ -108,7 +108,7 @@ impl CsafValidation {
             }
         }
 
-        let tests = V::tests_in_preset(self.preset);
+        let tests = V::tests_in_preset(&self.preset);
         let cap = self.max_issues_per_test;
         let mut results = vec![];
         let mut grand_total = 0usize;

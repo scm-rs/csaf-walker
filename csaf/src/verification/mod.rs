@@ -38,9 +38,10 @@ impl Csaf {
         detect_version_with(data).and_then(|VersionAndData { version, data }| match &*version {
             "2.0" => Ok(Csaf::V2_0(data.parse()?)),
             "2.1" => Ok(Csaf::V2_1(data.parse()?)),
-            _ => Err(std::io::Error::other(format!(
-                "Unsupported CSAF version: {version}"
-            ))),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                format!("Unsupported CSAF version: {}", version),
+            )),
         })
     }
 

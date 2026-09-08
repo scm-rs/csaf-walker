@@ -26,8 +26,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn in_memory_collector() {
+    #[tokio::test]
+    async fn in_memory_collector() {
         let mut collector = InMemoryCollector::new();
 
         collector
@@ -36,26 +36,32 @@ mod test {
                 ReportSeverity::Warning,
                 vec![check("warn1"), check("warn2")],
             )
+            .await
             .unwrap();
         collector
             .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")])
+            .await
             .unwrap();
         collector
             .insert(key("b.json"), ReportSeverity::Warning, vec![check("warn4")])
+            .await
             .unwrap();
 
         collector
             .insert(key("c.json"), ReportSeverity::Error, vec![check("err1")])
+            .await
             .unwrap();
         collector
             .insert(key("c.json"), ReportSeverity::Error, vec![check("err2")])
+            .await
             .unwrap();
 
         collector
             .insert(key("d.json"), ReportSeverity::Warning, vec![])
+            .await
             .unwrap();
 
-        let view = collector.into_view().unwrap();
+        let view = collector.into_view().await.unwrap();
 
         assert_eq!(view.count(&ReportSeverity::Warning), 2);
         assert_eq!(view.total(&ReportSeverity::Warning), 4);
@@ -93,8 +99,8 @@ mod test {
         assert_eq!(error_messages, vec![vec!["err2"]]);
     }
 
-    #[test]
-    fn file_backed_collector() {
+    #[tokio::test]
+    async fn file_backed_collector() {
         let mut collector = FileBackedCollector::new().unwrap();
 
         collector
@@ -103,20 +109,24 @@ mod test {
                 ReportSeverity::Warning,
                 vec![check("warn1"), check("warn2")],
             )
+            .await
             .unwrap();
         collector
             .insert(key("b.json"), ReportSeverity::Error, vec![check("err1")])
+            .await
             .unwrap();
         collector
             .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")])
+            .await
             .unwrap();
 
         // empty insert is a no-op
         collector
             .insert(key("c.json"), ReportSeverity::Warning, vec![])
+            .await
             .unwrap();
 
-        let view = collector.into_view().unwrap();
+        let view = collector.into_view().await.unwrap();
 
         // counts reflect all inserts (ungrouped)
         assert_eq!(view.count(&ReportSeverity::Warning), 2);

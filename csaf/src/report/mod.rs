@@ -8,8 +8,11 @@ pub use render::*;
 
 use crate::{check::CheckError, discover::DiscoveredAdvisory};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
-use std::fmt;
+use std::{
+    collections::{BTreeMap, HashSet},
+    fmt,
+    future::Future,
+};
 use url::Url;
 use walker_common::utils::url::Urlify;
 
@@ -27,9 +30,9 @@ pub trait ReportCollector: Send {
         key: DocumentKey,
         severity: ReportSeverity,
         messages: Vec<CheckError>,
-    ) -> anyhow::Result<()>;
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    fn into_view(self) -> anyhow::Result<Self::View>;
+    fn into_view(self) -> impl Future<Output = anyhow::Result<Self::View>> + Send;
 }
 
 pub trait ReportView {

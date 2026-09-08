@@ -3,8 +3,9 @@ use crate::check::CheckError;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
-    io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write},
+    io::{BufRead, BufReader, Seek, SeekFrom},
 };
+use tokio::io::{AsyncWriteExt, BufWriter};
 
 #[derive(Serialize, Deserialize)]
 struct Record {
@@ -25,7 +26,7 @@ struct Record {
 /// - Warnings for the same document may appear in separate entries
 /// - Error overwrites for the same key are not applied
 pub struct FileBackedCollector {
-    writer: BufWriter<std::fs::File>,
+    writer: BufWriter<tokio::fs::File>,
     error_count: usize,
     error_total: usize,
     warning_count: usize,
@@ -34,9 +35,10 @@ pub struct FileBackedCollector {
 
 impl FileBackedCollector {
     pub fn new() -> anyhow::Result<Self> {
-        let file = tempfile::tempfile()?;
+        let std_file = tempfile::tempfile()?;
+        let tokio_file = tokio::fs::File::from_std(std_file);
         Ok(Self {
-            writer: BufWriter::new(file),
+            writer: BufWriter::new(tokio_file),
             error_count: 0,
             error_total: 0,
             warning_count: 0,
@@ -48,7 +50,7 @@ impl FileBackedCollector {
 impl ReportCollector for FileBackedCollector {
     type View = FileBackedView;
 
-    fn insert(
+    async fn insert(
         &mut self,
         key: DocumentKey,
         severity: ReportSeverity,
@@ -75,19 +77,21 @@ impl ReportCollector for FileBackedCollector {
             severity,
             messages,
         };
-        serde_json::to_writer(&mut self.writer, &record)?;
-        writeln!(&mut self.writer)?;
+        let mut line = serde_json::to_vec(&record)?;
+        line.push(b'\n');
+        self.writer.write_all(&line).await?;
 
         Ok(())
     }
 
-    fn into_view(mut self) -> anyhow::Result<Self::View> {
-        self.writer.flush()?;
-        let mut file = self.writer.into_inner()?;
-        file.seek(SeekFrom::Start(0))?;
+    async fn into_view(mut self) -> anyhow::Result<Self::View> {
+        self.writer.flush().await?;
+        let tokio_file = self.writer.into_inner();
+        let mut std_file = tokio_file.into_std().await;
+        std_file.seek(SeekFrom::Start(0))?;
 
         Ok(FileBackedView {
-            file,
+            file: std_file,
             error_count: self.error_count,
             error_total: self.error_total,
             warning_count: self.warning_count,

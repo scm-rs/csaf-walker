@@ -149,11 +149,15 @@ impl Report {
                                 },
                             };
 
-                            collector.lock().await.insert(
-                                name,
-                                ReportSeverity::Error,
-                                vec![CheckError::from(err.to_string())],
-                            )?;
+                            collector
+                                .lock()
+                                .await
+                                .insert(
+                                    name,
+                                    ReportSeverity::Error,
+                                    vec![CheckError::from(err.to_string())],
+                                )
+                                .await?;
                             return Ok::<_, anyhow::Error>(());
                         }
                     };
@@ -165,7 +169,8 @@ impl Report {
                         collector
                             .lock()
                             .await
-                            .insert(name, ReportSeverity::Warning, checks)?;
+                            .insert(name, ReportSeverity::Warning, checks)
+                            .await?;
                     }
 
                     Ok::<_, anyhow::Error>(())
@@ -205,7 +210,7 @@ impl Report {
         let collector = Arc::try_unwrap(collector)
             .map_err(|_| anyhow::anyhow!("collector still has outstanding references"))?
             .into_inner();
-        let view = collector.into_view()?;
+        let view = collector.into_view().await?;
 
         Self::render_report(
             &self.render,

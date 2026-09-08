@@ -71,7 +71,7 @@ impl Default for InMemoryCollector {
 impl ReportCollector for InMemoryCollector {
     type View = InMemoryView;
 
-    fn insert(
+    async fn insert(
         &mut self,
         key: DocumentKey,
         severity: ReportSeverity,
@@ -95,7 +95,7 @@ impl ReportCollector for InMemoryCollector {
         Ok(())
     }
 
-    fn into_view(self) -> anyhow::Result<Self::View> {
+    async fn into_view(self) -> anyhow::Result<Self::View> {
         Ok(self.view)
     }
 }

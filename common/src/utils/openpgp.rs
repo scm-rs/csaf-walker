@@ -25,7 +25,7 @@ pub fn validate_keys(bytes: Bytes, fingerprint: Option<&str>) -> Result<PublicKe
     for cert in &certs {
         if let Some(expected) = &fingerprint {
             let actual = cert.fingerprint().to_hex();
-            if &actual != expected {
+            if !actual.eq_ignore_ascii_case(expected) {
                 return Err(Error::FingerprintMismatch {
                     actual,
                     expected: expected.to_string(),

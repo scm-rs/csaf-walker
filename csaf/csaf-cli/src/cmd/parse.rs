@@ -1,4 +1,4 @@
-use csaf::Csaf;
+use csaf_walker::verification::Csaf;
 use std::path::PathBuf;
 use walker_common::{cli::CommandDefaults, progress::Progress};
 
@@ -13,14 +13,14 @@ impl CommandDefaults for Parse {}
 impl Parse {
     pub async fn run<P: Progress>(self, progress: P) -> anyhow::Result<()> {
         progress.start(1);
-        let data = std::fs::read(self.file)?;
-        match serde_json::from_slice::<Csaf>(&data) {
+
+        match Csaf::parse(&self.file) {
             Ok(csaf) => {
                 println!(
                     "  {} ({}): {}",
-                    csaf.document.tracking.id,
-                    csaf.document.tracking.initial_release_date,
-                    csaf.document.title
+                    csaf.document().tracking().id(),
+                    csaf.document().tracking().initial_release_date(),
+                    csaf.document().title()
                 );
             }
             Err(err) => {

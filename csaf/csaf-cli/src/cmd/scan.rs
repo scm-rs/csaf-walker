@@ -2,7 +2,7 @@ use crate::{
     cmd::{DiscoverArguments, FilterArguments},
     common::walk_standard,
 };
-use csaf::Csaf;
+use csaf_walker::verification::Csaf;
 use csaf_walker::{
     source::DispatchSource,
     validation::{ValidatedAdvisory, ValidationError},
@@ -52,13 +52,13 @@ impl Scan {
                         log::debug!("  Metadata: {:?}", adv.sha256);
                         log::debug!("    SHA256: {:?}", adv.sha256);
                         log::debug!("    SHA512: {:?}", adv.sha512);
-                        match serde_json::from_slice::<Csaf>(&adv.data) {
+                        match Csaf::parse(&*adv.data) {
                             Ok(csaf) => {
                                 progress.println(&format!(
                                     "  {} ({}): {}",
-                                    csaf.document.tracking.id,
-                                    csaf.document.tracking.initial_release_date,
-                                    csaf.document.title
+                                    csaf.document().tracking().id(),
+                                    csaf.document().tracking().initial_release_date(),
+                                    csaf.document().title()
                                 ));
                             }
                             Err(err) => {

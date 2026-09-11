@@ -54,6 +54,7 @@
 //! }
 //! ```
 
+pub mod check;
 pub mod discover;
 pub mod metadata;
 pub mod model;

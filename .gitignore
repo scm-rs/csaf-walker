@@ -6,3 +6,4 @@ Cargo.lock
 /report.*
 /*stats.json
 *.cdx.json
+/.serena

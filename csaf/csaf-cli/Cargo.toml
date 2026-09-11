@@ -18,7 +18,6 @@ anyhow = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "color"] }
 colored_json = { workspace = true }
-csaf = { workspace = true }
 flexible-time = { workspace = true }
 humantime = { workspace = true }
 jsonpath-rust = { workspace = true }

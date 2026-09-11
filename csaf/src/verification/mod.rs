@@ -3,13 +3,14 @@
 //! Checks to ensure conformity with the specification.
 
 use crate::{
+    check::CheckError,
     discover::{AsDiscovered, DiscoveredAdvisory},
     retrieve::{AsRetrieved, RetrievalContext, RetrievedAdvisory, RetrievedVisitor},
     source::Source,
     validation::{ValidatedAdvisory, ValidatedVisitor, ValidationContext, ValidationError},
-    verification::check::{Check, CheckError},
+    verification::check::Check,
 };
-use csaf::Csaf;
+use csaf::json::JsonSource;
 use serde::de::Error as _;
 use std::{
     collections::{HashMap, HashSet},
@@ -24,15 +25,93 @@ use walker_common::{retrieve::RetrievalError, utils::url::Urlify};
 
 pub mod check;
 
+#[derive(Debug, Clone)]
+pub enum Csaf {
+    V2_0(csaf::schema::csaf2_0::schema::CommonSecurityAdvisoryFramework),
+    V2_1(csaf::schema::csaf2_1::schema::CommonSecurityAdvisoryFramework),
+}
+
+impl Csaf {
+    pub fn parse<T: JsonSource>(data: T) -> Result<Self, std::io::Error> {
+        use csaf::csaf::loader::*;
+
+        detect_version_with(data).and_then(|VersionAndData { version, data }| match &*version {
+            "2.0" => Ok(Csaf::V2_0(data.parse()?)),
+            "2.1" => Ok(Csaf::V2_1(data.parse()?)),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                format!("Unsupported CSAF version: {}", version),
+            )),
+        })
+    }
+
+    pub fn document(&self) -> DocumentLevelMetadata<'_> {
+        match self {
+            Self::V2_0(csaf) => DocumentLevelMetadata::V2_0(&csaf.document),
+            Self::V2_1(csaf) => DocumentLevelMetadata::V2_1(&csaf.document),
+        }
+    }
+}
+
+pub enum DocumentLevelMetadata<'a> {
+    V2_0(&'a csaf::schema::csaf2_0::schema::DocumentLevelMetaData),
+    V2_1(&'a csaf::schema::csaf2_1::schema::DocumentLevelMetaData),
+}
+
+impl DocumentLevelMetadata<'_> {
+    pub fn title(&self) -> &str {
+        match self {
+            Self::V2_0(csaf) => &csaf.title,
+            Self::V2_1(csaf) => &csaf.title,
+        }
+    }
+
+    pub fn tracking(&self) -> Tracking<'_> {
+        match self {
+            Self::V2_0(csaf) => Tracking::V2_0(&csaf.tracking),
+            Self::V2_1(csaf) => Tracking::V2_1(&csaf.tracking),
+        }
+    }
+}
+
+pub enum Tracking<'a> {
+    V2_0(&'a csaf::schema::csaf2_0::schema::Tracking),
+    V2_1(&'a csaf::schema::csaf2_1::schema::Tracking),
+}
+
+impl Tracking<'_> {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::V2_0(csaf) => &csaf.id,
+            Self::V2_1(csaf) => &csaf.id,
+        }
+    }
+
+    pub fn initial_release_date(&self) -> &str {
+        match self {
+            Self::V2_0(csaf) => &csaf.initial_release_date,
+            Self::V2_1(csaf) => &csaf.initial_release_date,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VerifiedAdvisory<A, I>
 where
     A: AsRetrieved,
     I: Clone + PartialEq + Eq + Hash,
 {
+    /// The advisory that was verified.
     pub advisory: A,
+    /// The parsed CSAF document.
     pub csaf: Csaf,
+    /// Per-check mandatory failures (errors).
     pub failures: HashMap<I, Vec<CheckError>>,
+    /// Per-check optional/recommended failures (warnings).
+    pub warnings: HashMap<I, Vec<CheckError>>,
+    /// Per-check informational notes.
+    pub infos: HashMap<I, Vec<CheckError>>,
+    /// Checks that passed all tests.
     pub successes: HashSet<I>,
 }
 
@@ -180,11 +259,14 @@ where
     async fn verify(&self, advisory: A) -> Result<VerifiedAdvisory<A, I>, VerificationError<E, A>> {
         let data = advisory.as_retrieved().data.clone();
 
-        let csaf = match tokio::task::spawn_blocking(move || serde_json::from_slice::<Csaf>(&data))
-            .await
-        {
+        let csaf = match tokio::task::spawn_blocking(move || Csaf::parse(&*data)).await {
             Ok(Ok(csaf)) => csaf,
-            Ok(Err(error)) => return Err(VerificationError::Parsing { error, advisory }),
+            Ok(Err(error)) => {
+                return Err(VerificationError::Parsing {
+                    error: serde::de::Error::custom(error),
+                    advisory,
+                });
+            }
             Err(_) => {
                 return Err(VerificationError::Parsing {
                     error: serde_json::error::Error::custom("failed to wait for deserialization"),
@@ -194,6 +276,8 @@ where
         };
 
         let mut failures = HashMap::new();
+        let mut warnings = HashMap::new();
+        let mut infos = HashMap::new();
         let mut successes = HashSet::new();
 
         for (index, check) in &self.checks {
@@ -201,9 +285,19 @@ where
                 Ok(result) => result,
                 Err(error) => return Err(VerificationError::Check { error, advisory }),
             };
-            if !result.is_empty() {
-                failures.insert(index.clone(), result);
-            } else {
+            let has_issues = !result.errors.is_empty()
+                || !result.warnings.is_empty()
+                || !result.infos.is_empty();
+            if !result.errors.is_empty() {
+                failures.insert(index.clone(), result.errors);
+            }
+            if !result.warnings.is_empty() {
+                warnings.insert(index.clone(), result.warnings);
+            }
+            if !result.infos.is_empty() {
+                infos.insert(index.clone(), result.infos);
+            }
+            if !has_issues {
                 successes.insert(index.clone());
             }
         }
@@ -212,6 +306,8 @@ where
             advisory,
             csaf,
             failures,
+            warnings,
+            infos,
             successes,
         })
     }

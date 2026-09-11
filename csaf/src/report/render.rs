@@ -38,6 +38,7 @@ pub enum Title {
     Duplicates,
     Warnings,
     Errors,
+    Infos,
 }
 
 impl Display for Title {
@@ -46,6 +47,7 @@ impl Display for Title {
             Self::Duplicates => f.write_str("Duplicates"),
             Self::Warnings => f.write_str("Warnings"),
             Self::Errors => f.write_str("Errors"),
+            Self::Infos => f.write_str("Infos"),
         }
     }
 }
@@ -171,28 +173,35 @@ impl HtmlReport<'_> {
         Ok(())
     }
 
-    fn render_warnings(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let file_count = self.result.view.count(&ReportSeverity::Warning);
-        let total_count = self.result.view.total(&ReportSeverity::Warning);
+    fn render_issues(
+        &self,
+        f: &mut Formatter<'_>,
+        severity: ReportSeverity,
+        title: Title,
+        label: &str,
+    ) -> std::fmt::Result {
+        let file_count = self.result.view.count(&severity);
+        let total_count = self.result.view.total(&severity);
 
+        let prefix = label.to_lowercase();
         let data = |f: &mut Formatter<'_>| {
             self.result
                 .view
-                .for_each(&ReportSeverity::Warning, &mut |k, messages| {
-                    let (url, label) = self.link_document(k);
+                .for_each(&severity, &mut |k, messages| {
+                    let (url, doc_label) = self.link_document(k);
 
-                    let id = format!("warning-{url}");
+                    let id = format!("{prefix}-{url}");
                     let id = html_escape::encode_quoted_attribute(&id);
 
                     writeln!(
                         f,
                         r##"
             <tr>
-                <td id="{id}"><a href="{url}" target="_blank" style="white-space: nowrap;">{label}</a> <a class="link-secondary" href="#{id}">§</a></td>
+                <td id="{id}"><a href="{url}" target="_blank" style="white-space: nowrap;">{doc_label}</a> <a class="link-secondary" href="#{id}">§</a></td>
                 <td><ul>
 "##,
                         url = html_escape::encode_quoted_attribute(&url),
-                        label = html_escape::encode_text(&label),
+                        doc_label = html_escape::encode_text(&doc_label),
                     )?;
 
                     for text in messages {
@@ -223,9 +232,9 @@ impl HtmlReport<'_> {
             Self::render_table(
                 f,
                 [file_count, total_count],
-                Title::Warnings,
+                title,
                 &format!(
-                    "{total_count} warning(s) in {file_count} file(s) detected",
+                    "{total_count} {label}(s) in {file_count} file(s) detected",
                     total_count = Formatted(total_count),
                     file_count = Formatted(file_count),
                 ),
@@ -269,6 +278,7 @@ impl HtmlReport<'_> {
                 (
                     match title {
                         Title::Warnings => "text-bg-warning",
+                        Title::Infos => "text-bg-info",
                         _ => "text-bg-danger",
                     },
                     Formatted(count).to_string(),
@@ -305,7 +315,8 @@ impl Display for HtmlReport<'_> {
         self.render_total(f)?;
         self.render_duplicates(f)?;
         self.render_errors(f)?;
-        self.render_warnings(f)?;
+        self.render_issues(f, ReportSeverity::Warning, Title::Warnings, "warning")?;
+        self.render_issues(f, ReportSeverity::Info, Title::Infos, "info")?;
         Ok(())
     }
 }

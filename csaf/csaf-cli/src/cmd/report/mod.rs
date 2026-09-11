@@ -162,14 +162,34 @@ impl Report {
                         }
                     };
 
+                    let name = DocumentKey::for_document(&adv);
+
                     if !adv.failures.is_empty() {
-                        let name = DocumentKey::for_document(&adv);
                         let checks: Vec<CheckError> =
                             adv.failures.into_values().flatten().collect();
                         collector
                             .lock()
                             .await
-                            .insert(name, ReportSeverity::Warning, checks)
+                            .insert(name.clone(), ReportSeverity::Error, checks)
+                            .await?;
+                    }
+
+                    if !adv.warnings.is_empty() {
+                        let checks: Vec<CheckError> =
+                            adv.warnings.into_values().flatten().collect();
+                        collector
+                            .lock()
+                            .await
+                            .insert(name.clone(), ReportSeverity::Warning, checks)
+                            .await?;
+                    }
+
+                    if !adv.infos.is_empty() {
+                        let checks: Vec<CheckError> = adv.infos.into_values().flatten().collect();
+                        collector
+                            .lock()
+                            .await
+                            .insert(name, ReportSeverity::Info, checks)
                             .await?;
                     }
 

@@ -31,6 +31,8 @@ pub struct FileBackedCollector {
     error_total: usize,
     warning_count: usize,
     warning_total: usize,
+    info_count: usize,
+    info_total: usize,
 }
 
 impl FileBackedCollector {
@@ -43,6 +45,8 @@ impl FileBackedCollector {
             error_total: 0,
             warning_count: 0,
             warning_total: 0,
+            info_count: 0,
+            info_total: 0,
         })
     }
 }
@@ -70,6 +74,10 @@ impl ReportCollector for FileBackedCollector {
                 self.warning_count += 1;
                 self.warning_total += count;
             }
+            ReportSeverity::Info => {
+                self.info_count += 1;
+                self.info_total += count;
+            }
         }
 
         let record = Record {
@@ -96,6 +104,8 @@ impl ReportCollector for FileBackedCollector {
             error_total: self.error_total,
             warning_count: self.warning_count,
             warning_total: self.warning_total,
+            info_count: self.info_count,
+            info_total: self.info_total,
         })
     }
 }
@@ -106,6 +116,8 @@ pub struct FileBackedView {
     error_total: usize,
     warning_count: usize,
     warning_total: usize,
+    info_count: usize,
+    info_total: usize,
 }
 
 impl ReportView for FileBackedView {
@@ -113,6 +125,7 @@ impl ReportView for FileBackedView {
         match severity {
             ReportSeverity::Error => self.error_count,
             ReportSeverity::Warning => self.warning_count,
+            ReportSeverity::Info => self.info_count,
         }
     }
 
@@ -120,6 +133,7 @@ impl ReportView for FileBackedView {
         match severity {
             ReportSeverity::Error => self.error_total,
             ReportSeverity::Warning => self.warning_total,
+            ReportSeverity::Info => self.info_total,
         }
     }
 

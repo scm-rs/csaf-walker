@@ -16,10 +16,15 @@ use std::{
 use url::Url;
 use walker_common::utils::url::Urlify;
 
+/// Severity level for report entries.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReportSeverity {
+    /// Mandatory requirement violation.
     Error,
+    /// Optional/recommended requirement violation.
     Warning,
+    /// Informational note.
+    Info,
 }
 
 pub trait ReportCollector: Send {

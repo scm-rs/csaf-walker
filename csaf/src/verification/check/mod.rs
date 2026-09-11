@@ -6,9 +6,20 @@ use csaf::validation::{TestResultStatus, Validatable, ValidationError};
 use parking_lot::Mutex;
 use std::{collections::HashSet, sync::Arc};
 
+/// Result of running checks on a CSAF document.
 pub struct CheckResult {
+    /// Mandatory requirement violations.
     pub errors: Vec<CheckError>,
-    pub total: usize,
+    /// Optional/recommended requirement violations.
+    pub warnings: Vec<CheckError>,
+    /// Informational notes.
+    pub infos: Vec<CheckError>,
+    /// Total number of errors (before capping).
+    pub total_errors: usize,
+    /// Total number of warnings (before capping).
+    pub total_warnings: usize,
+    /// Total number of infos (before capping).
+    pub total_infos: usize,
 }
 
 #[async_trait(?Send)]
@@ -25,8 +36,15 @@ where
 {
     async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
         let errors = (self)(csaf);
-        let total = errors.len();
-        Ok(CheckResult { errors, total })
+        let total_errors = errors.len();
+        Ok(CheckResult {
+            errors,
+            warnings: vec![],
+            infos: vec![],
+            total_errors,
+            total_warnings: 0,
+            total_infos: 0,
+        })
     }
 }
 
@@ -110,30 +128,36 @@ impl CsafValidation {
 
         let tests = V::tests_in_preset(&self.preset);
         let cap = self.max_issues_per_test;
-        let mut results = vec![];
-        let mut grand_total = 0usize;
+        let mut errors = vec![];
+        let mut warnings = vec![];
+        let mut infos = vec![];
+        let mut total_errors = 0usize;
+        let mut total_warnings = 0usize;
+        let mut total_infos = 0usize;
 
         for test in tests.into_iter().flatten() {
             let result = csaf.run_test(test);
 
             if let TestResultStatus::Failure {
-                errors,
-                warnings,
-                infos,
+                errors: test_errors,
+                warnings: test_warnings,
+                infos: test_infos,
             } = result.status
             {
-                let total = errors.len() + warnings.len() + infos.len();
-                grand_total += total;
+                let total = test_errors.len() + test_warnings.len() + test_infos.len();
+                total_errors += test_errors.len();
+                total_warnings += test_warnings.len();
+                total_infos += test_infos.len();
                 let mut remaining = if cap == 0 { usize::MAX } else { cap };
                 let intern = |s: &str| self.intern(s);
                 let id = self.intern(test);
 
-                collect(&mut results, errors, &mut remaining, &id, &intern);
-                collect(&mut results, warnings, &mut remaining, &id, &intern);
-                collect(&mut results, infos, &mut remaining, &id, &intern);
+                collect(&mut errors, test_errors, &mut remaining, &id, &intern);
+                collect(&mut warnings, test_warnings, &mut remaining, &id, &intern);
+                collect(&mut infos, test_infos, &mut remaining, &id, &intern);
 
                 if cap > 0 && total > cap {
-                    results.push(CheckError {
+                    errors.push(CheckError {
                         id: Arc::clone(&id),
                         message: self.intern(&format!(
                             "threshold of {cap} reached, {} issues omitted",
@@ -145,8 +169,12 @@ impl CsafValidation {
         }
 
         Ok(CheckResult {
-            errors: results,
-            total: grand_total,
+            errors,
+            warnings,
+            infos,
+            total_errors,
+            total_warnings,
+            total_infos,
         })
     }
 }

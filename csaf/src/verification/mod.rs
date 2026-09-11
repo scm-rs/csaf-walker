@@ -101,9 +101,17 @@ where
     A: AsRetrieved,
     I: Clone + PartialEq + Eq + Hash,
 {
+    /// The advisory that was verified.
     pub advisory: A,
+    /// The parsed CSAF document.
     pub csaf: Csaf,
+    /// Per-check mandatory failures (errors).
     pub failures: HashMap<I, Vec<CheckError>>,
+    /// Per-check optional/recommended failures (warnings).
+    pub warnings: HashMap<I, Vec<CheckError>>,
+    /// Per-check informational notes.
+    pub infos: HashMap<I, Vec<CheckError>>,
+    /// Checks that passed all tests.
     pub successes: HashSet<I>,
 }
 
@@ -268,6 +276,8 @@ where
         };
 
         let mut failures = HashMap::new();
+        let mut warnings = HashMap::new();
+        let mut infos = HashMap::new();
         let mut successes = HashSet::new();
 
         for (index, check) in &self.checks {
@@ -275,9 +285,19 @@ where
                 Ok(result) => result,
                 Err(error) => return Err(VerificationError::Check { error, advisory }),
             };
+            let has_issues = !result.errors.is_empty()
+                || !result.warnings.is_empty()
+                || !result.infos.is_empty();
             if !result.errors.is_empty() {
                 failures.insert(index.clone(), result.errors);
-            } else {
+            }
+            if !result.warnings.is_empty() {
+                warnings.insert(index.clone(), result.warnings);
+            }
+            if !result.infos.is_empty() {
+                infos.insert(index.clone(), result.infos);
+            }
+            if !has_issues {
                 successes.insert(index.clone());
             }
         }
@@ -286,6 +306,8 @@ where
             advisory,
             csaf,
             failures,
+            warnings,
+            infos,
             successes,
         })
     }

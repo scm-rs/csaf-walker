@@ -34,27 +34,28 @@ impl Validate {
         let result = check.check(&csaf).await?;
 
         let filename = self.file.display();
-        let shown = result.errors.len();
-        let total = result.total;
+        let total = result.total_errors + result.total_warnings + result.total_infos;
 
         println!("# Validation: {filename}\n");
         println!("**Preset:** {}  ", self.preset);
 
         if total == 0 {
             println!("\nNo issues found.");
-        } else if shown == total {
-            println!("**Issues:** {}\n", Formatted(total));
-            for error in &result.errors {
-                println!("- [{}] {}", error.id, error.message);
-            }
         } else {
             println!(
-                "**Issues:** {} ({} shown)\n",
-                Formatted(total),
-                Formatted(shown)
+                "**Issues:** {} error(s), {} warning(s), {} info(s)\n",
+                Formatted(result.total_errors),
+                Formatted(result.total_warnings),
+                Formatted(result.total_infos),
             );
             for error in &result.errors {
-                println!("- [{}] {}", error.id, error.message);
+                println!("- ERROR [{}] {}", error.id, error.message);
+            }
+            for warning in &result.warnings {
+                println!("- WARN  [{}] {}", warning.id, warning.message);
+            }
+            for info in &result.infos {
+                println!("- INFO  [{}] {}", info.id, info.message);
             }
         }
 

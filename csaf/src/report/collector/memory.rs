@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, fmt};
 pub struct InMemoryView {
     errors: BTreeMap<DocumentKey, Vec<CheckError>>,
     warnings: BTreeMap<DocumentKey, Vec<CheckError>>,
+    infos: BTreeMap<DocumentKey, Vec<CheckError>>,
 }
 
 impl Default for InMemoryView {
@@ -18,6 +19,7 @@ impl InMemoryView {
         Self {
             errors: BTreeMap::new(),
             warnings: BTreeMap::new(),
+            infos: BTreeMap::new(),
         }
     }
 
@@ -25,6 +27,7 @@ impl InMemoryView {
         match severity {
             ReportSeverity::Error => &self.errors,
             ReportSeverity::Warning => &self.warnings,
+            ReportSeverity::Info => &self.infos,
         }
     }
 }
@@ -80,16 +83,15 @@ impl ReportCollector for InMemoryCollector {
         if messages.is_empty() {
             return Ok(());
         }
-        let map = match severity {
-            ReportSeverity::Error => &mut self.view.errors,
-            ReportSeverity::Warning => &mut self.view.warnings,
-        };
         match severity {
             ReportSeverity::Error => {
-                map.insert(key, messages);
+                self.view.errors.insert(key, messages);
             }
             ReportSeverity::Warning => {
-                map.entry(key).or_default().extend(messages);
+                self.view.warnings.entry(key).or_default().extend(messages);
+            }
+            ReportSeverity::Info => {
+                self.view.infos.entry(key).or_default().extend(messages);
             }
         }
         Ok(())

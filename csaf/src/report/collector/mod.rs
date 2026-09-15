@@ -40,11 +40,21 @@ mod test {
             .await
             .unwrap();
         collector
-            .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")], 1)
+            .insert(
+                key("a.json"),
+                ReportSeverity::Warning,
+                vec![check("warn3")],
+                1,
+            )
             .await
             .unwrap();
         collector
-            .insert(key("b.json"), ReportSeverity::Warning, vec![check("warn4")], 1)
+            .insert(
+                key("b.json"),
+                ReportSeverity::Warning,
+                vec![check("warn4")],
+                1,
+            )
             .await
             .unwrap();
 
@@ -118,7 +128,12 @@ mod test {
             .await
             .unwrap();
         collector
-            .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")], 1)
+            .insert(
+                key("a.json"),
+                ReportSeverity::Warning,
+                vec![check("warn3")],
+                1,
+            )
             .await
             .unwrap();
 

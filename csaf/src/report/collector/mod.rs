@@ -86,7 +86,7 @@ mod test {
         assert_eq!(warning_messages[0], vec!["warn3"]);
         assert_eq!(warning_messages[1], vec!["warn1", "warn2", "warn4"]);
 
-        // error overwrite
+        // errors now extend like warnings
         let mut error_messages = Vec::new();
         view.for_each(&ReportSeverity::Error, &mut |_k, msgs| {
             error_messages.push(
@@ -97,7 +97,7 @@ mod test {
             Ok(())
         })
         .unwrap();
-        assert_eq!(error_messages, vec![vec!["err2"]]);
+        assert_eq!(error_messages, vec![vec!["err1", "err2"]]);
     }
 
     #[tokio::test]

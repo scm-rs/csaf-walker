@@ -96,7 +96,7 @@ impl ReportCollector for InMemoryCollector {
         }
         match severity {
             ReportSeverity::Error => {
-                self.view.errors.insert(key, messages);
+                self.view.errors.entry(key).or_default().extend(messages);
                 self.view.error_total += total;
             }
             ReportSeverity::Warning => {

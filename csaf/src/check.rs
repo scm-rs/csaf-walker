@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::vec;
 
 mod arc_str_serde {
     use serde::{Deserialize, Deserializer, Serializer};
@@ -38,5 +39,32 @@ impl From<String> for CheckError {
             id: Arc::from(""),
             message: Arc::from(s.as_str()),
         }
+    }
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct Capped {
+    /// The recorded items
+    pub items: Vec<CheckError>,
+    /// The total number
+    ///
+    /// This may be more than the items, as this would mean it was capped.
+    pub total: usize,
+}
+
+impl FromIterator<CheckError> for Capped {
+    fn from_iter<T: IntoIterator<Item = CheckError>>(iter: T) -> Self {
+        let items = Vec::from_iter(iter);
+        let total = items.len();
+        Self { items, total }
+    }
+}
+
+impl IntoIterator for Capped {
+    type Item = CheckError;
+    type IntoIter = vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.items.into_iter()
     }
 }

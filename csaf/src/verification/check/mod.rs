@@ -1,25 +1,99 @@
 pub use crate::check::CheckError;
 
-use crate::verification::Csaf;
+use crate::{check::Capped, verification::Csaf};
 use async_trait::async_trait;
 use csaf::validation::{TestResultStatus, Validatable, ValidationError};
 use parking_lot::Mutex;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashMap, collections::HashSet, sync::Arc};
+
+/// A `Vec` with capping support for `CheckError`.
+#[derive(Clone)]
+pub struct Capping {
+    /// The maximum number of items
+    cap: usize,
+    /// The total number of entries (even when capped)
+    total: usize,
+    /// The actual content
+    items: HashMap<Arc<str>, Vec<CheckError>>,
+}
+
+impl Capping {
+    pub fn new(cap: usize) -> Self {
+        Self {
+            cap,
+            total: 0,
+            items: Default::default(),
+        }
+    }
+
+    pub fn finish(self) -> Capped {
+        let mut result = Vec::new();
+
+        for (id, mut items) in self.items {
+            if items.len() == self.cap {
+                items.push(CheckError {
+                    id: id.clone(),
+                    message: Arc::from(format!(
+                        "threshold of {cap} reached, {omitted} issues omitted",
+                        cap = self.cap,
+                        omitted = self.total - self.cap,
+                    )),
+                })
+            }
+
+            result.extend(items);
+        }
+
+        Capped {
+            total: self.total,
+            items: result,
+        }
+    }
+
+    pub fn push(&mut self, item: CheckError) {
+        // always uptick
+        self.total += 1;
+
+        // now add it we have room
+        let items = self.items.entry(item.id.clone()).or_default();
+
+        if items.len() < self.cap {
+            items.push(item);
+        }
+    }
+}
+
+impl Extend<CheckError> for &mut Capping {
+    fn extend<T: IntoIterator<Item = CheckError>>(&mut self, iter: T) {
+        for item in iter {
+            self.push(item)
+        }
+    }
+}
 
 /// Result of running checks on a CSAF document.
+#[derive(Clone, Default)]
 pub struct CheckResult {
     /// Mandatory requirement violations.
-    pub errors: Vec<CheckError>,
+    pub errors: Capped,
     /// Optional/recommended requirement violations.
-    pub warnings: Vec<CheckError>,
+    pub warnings: Capped,
     /// Informational notes.
-    pub infos: Vec<CheckError>,
-    /// Total number of errors (before capping).
-    pub total_errors: usize,
-    /// Total number of warnings (before capping).
-    pub total_warnings: usize,
-    /// Total number of infos (before capping).
-    pub total_infos: usize,
+    pub infos: Capped,
+}
+
+impl CheckResult {
+    /// return `true` if all of the results are empty
+    pub fn is_ok(&self) -> bool {
+        self.errors.items.is_empty()
+            && self.warnings.items.is_empty()
+            && self.infos.items.is_empty()
+    }
+
+    /// return the totals for all severities summed up
+    pub fn total(&self) -> usize {
+        self.errors.total + self.warnings.total + self.infos.total
+    }
 }
 
 #[async_trait(?Send)]
@@ -36,14 +110,9 @@ where
 {
     async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
         let errors = (self)(csaf);
-        let total_errors = errors.len();
         Ok(CheckResult {
-            errors,
-            warnings: vec![],
-            infos: vec![],
-            total_errors,
-            total_warnings: 0,
-            total_infos: 0,
+            errors: Capped::from_iter(errors),
+            ..Default::default()
         })
     }
 }
@@ -108,32 +177,23 @@ impl CsafValidation {
         V: Validatable,
     {
         fn collect(
-            result: &mut Vec<CheckError>,
-            errors: Vec<ValidationError>,
-            remaining: &mut usize,
+            mut result: impl Extend<CheckError>,
+            errors: impl IntoIterator<Item = ValidationError>,
             id: &Arc<str>,
             intern: &dyn Fn(&str) -> Arc<str>,
         ) {
             for error in errors {
-                if *remaining == 0 {
-                    return;
-                }
-                *remaining -= 1;
-                result.push(CheckError {
+                result.extend(Some(CheckError {
                     id: Arc::clone(id),
                     message: intern(&error.message),
-                });
+                }));
             }
         }
 
         let tests = V::tests_in_preset(&self.preset);
-        let cap = self.max_issues_per_test;
-        let mut errors = vec![];
-        let mut warnings = vec![];
-        let mut infos = vec![];
-        let mut total_errors = 0usize;
-        let mut total_warnings = 0usize;
-        let mut total_infos = 0usize;
+        let mut errors = Capping::new(self.max_issues_per_test);
+        let mut warnings = Capping::new(self.max_issues_per_test);
+        let mut infos = Capping::new(self.max_issues_per_test);
 
         for test in tests.into_iter().flatten() {
             let result = csaf.run_test(test);
@@ -144,37 +204,19 @@ impl CsafValidation {
                 infos: test_infos,
             } = result.status
             {
-                let total = test_errors.len() + test_warnings.len() + test_infos.len();
-                total_errors += test_errors.len();
-                total_warnings += test_warnings.len();
-                total_infos += test_infos.len();
-                let mut remaining = if cap == 0 { usize::MAX } else { cap };
                 let intern = |s: &str| self.intern(s);
                 let id = self.intern(test);
 
-                collect(&mut errors, test_errors, &mut remaining, &id, &intern);
-                collect(&mut warnings, test_warnings, &mut remaining, &id, &intern);
-                collect(&mut infos, test_infos, &mut remaining, &id, &intern);
-
-                if cap > 0 && total > cap {
-                    errors.push(CheckError {
-                        id: Arc::clone(&id),
-                        message: self.intern(&format!(
-                            "threshold of {cap} reached, {} issues omitted",
-                            total - cap,
-                        )),
-                    });
-                }
+                collect(&mut errors, test_errors, &id, &intern);
+                collect(&mut warnings, test_warnings, &id, &intern);
+                collect(&mut infos, test_infos, &id, &intern);
             }
         }
 
         Ok(CheckResult {
-            errors,
-            warnings,
-            infos,
-            total_errors,
-            total_warnings,
-            total_infos,
+            errors: errors.finish(),
+            warnings: warnings.finish(),
+            infos: infos.finish(),
         })
     }
 }

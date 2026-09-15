@@ -2,6 +2,7 @@ use crate::{
     cmd::{DiscoverArguments, FilterArguments, VerificationArguments},
     common::walk_visitor,
 };
+use csaf_walker::check::Capped;
 use csaf_walker::{
     discover::AsDiscovered,
     report::{
@@ -18,6 +19,7 @@ use csaf_walker::{
     visitors::duplicates::DetectDuplicatesVisitor,
 };
 use reqwest::Url;
+use std::collections::HashMap;
 use std::{
     path::PathBuf,
     sync::{
@@ -164,34 +166,33 @@ impl Report {
 
                     let name = DocumentKey::for_document(&adv);
 
-                    if !adv.failures.is_empty() {
-                        let checks: Vec<CheckError> =
-                            adv.failures.into_values().flatten().collect();
+                    async fn collect<C, I>(
+                        name: &DocumentKey,
+                        severity: ReportSeverity,
+                        items: HashMap<I, Capped>,
+                        collector: &Mutex<C>,
+                    ) -> Result<(), anyhow::Error>
+                    where
+                        C: ReportCollector + 'static,
+                    {
+                        if items.is_empty() {
+                            return Ok(());
+                        }
+
+                        let checks = items.into_values().flatten().collect();
+
                         collector
                             .lock()
                             .await
-                            .insert(name.clone(), ReportSeverity::Error, checks)
+                            .insert(name.clone(), severity, checks)
                             .await?;
+
+                        Ok(())
                     }
 
-                    if !adv.warnings.is_empty() {
-                        let checks: Vec<CheckError> =
-                            adv.warnings.into_values().flatten().collect();
-                        collector
-                            .lock()
-                            .await
-                            .insert(name.clone(), ReportSeverity::Warning, checks)
-                            .await?;
-                    }
-
-                    if !adv.infos.is_empty() {
-                        let checks: Vec<CheckError> = adv.infos.into_values().flatten().collect();
-                        collector
-                            .lock()
-                            .await
-                            .insert(name, ReportSeverity::Info, checks)
-                            .await?;
-                    }
+                    collect(&name, ReportSeverity::Error, adv.errors, &collector).await?;
+                    collect(&name, ReportSeverity::Warning, adv.warnings, &collector).await?;
+                    collect(&name, ReportSeverity::Info, adv.infos, &collector).await?;
 
                     Ok::<_, anyhow::Error>(())
                 }

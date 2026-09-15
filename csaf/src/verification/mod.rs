@@ -2,8 +2,8 @@
 //!
 //! Checks to ensure conformity with the specification.
 
+use crate::check::Capped;
 use crate::{
-    check::CheckError,
     discover::{AsDiscovered, DiscoveredAdvisory},
     retrieve::{AsRetrieved, RetrievalContext, RetrievedAdvisory, RetrievedVisitor},
     source::Source,
@@ -106,11 +106,11 @@ where
     /// The parsed CSAF document.
     pub csaf: Csaf,
     /// Per-check mandatory failures (errors).
-    pub failures: HashMap<I, Vec<CheckError>>,
+    pub errors: HashMap<I, Capped>,
     /// Per-check optional/recommended failures (warnings).
-    pub warnings: HashMap<I, Vec<CheckError>>,
+    pub warnings: HashMap<I, Capped>,
     /// Per-check informational notes.
-    pub infos: HashMap<I, Vec<CheckError>>,
+    pub infos: HashMap<I, Capped>,
     /// Checks that passed all tests.
     pub successes: HashSet<I>,
 }
@@ -275,7 +275,7 @@ where
             }
         };
 
-        let mut failures = HashMap::new();
+        let mut errors = HashMap::new();
         let mut warnings = HashMap::new();
         let mut infos = HashMap::new();
         let mut successes = HashSet::new();
@@ -285,27 +285,19 @@ where
                 Ok(result) => result,
                 Err(error) => return Err(VerificationError::Check { error, advisory }),
             };
-            let has_issues = !result.errors.is_empty()
-                || !result.warnings.is_empty()
-                || !result.infos.is_empty();
-            if !result.errors.is_empty() {
-                failures.insert(index.clone(), result.errors);
-            }
-            if !result.warnings.is_empty() {
-                warnings.insert(index.clone(), result.warnings);
-            }
-            if !result.infos.is_empty() {
-                infos.insert(index.clone(), result.infos);
-            }
-            if !has_issues {
+            if result.is_ok() {
                 successes.insert(index.clone());
+            } else {
+                errors.insert(index.clone(), result.errors);
+                warnings.insert(index.clone(), result.warnings);
+                infos.insert(index.clone(), result.infos);
             }
         }
 
         Ok(VerifiedAdvisory {
             advisory,
             csaf,
-            failures,
+            errors,
             warnings,
             infos,
             successes,

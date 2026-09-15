@@ -68,3 +68,52 @@ impl IntoIterator for Capped {
         self.items.into_iter()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn err(msg: &str) -> CheckError {
+        CheckError {
+            id: Arc::from("test"),
+            message: Arc::from(msg),
+        }
+    }
+
+    #[test]
+    fn capped_default_is_empty() {
+        let capped = Capped::default();
+        assert!(capped.items.is_empty());
+        assert_eq!(capped.total, 0);
+    }
+
+    #[test]
+    fn capped_from_iter() {
+        let capped: Capped = vec![err("a"), err("b"), err("c")].into_iter().collect();
+        assert_eq!(capped.items.len(), 3);
+        assert_eq!(capped.total, 3);
+        assert_eq!(&*capped.items[0].message, "a");
+        assert_eq!(&*capped.items[2].message, "c");
+    }
+
+    #[test]
+    fn capped_into_iter() {
+        let capped: Capped = vec![err("x"), err("y")].into_iter().collect();
+        let messages: Vec<_> = capped.into_iter().map(|e| e.message.to_string()).collect();
+        assert_eq!(messages, vec!["x", "y"]);
+    }
+
+    #[test]
+    fn check_error_from_str() {
+        let e = CheckError::from("hello");
+        assert_eq!(&*e.id, "");
+        assert_eq!(&*e.message, "hello");
+    }
+
+    #[test]
+    fn check_error_from_string() {
+        let e = CheckError::from("world".to_string());
+        assert_eq!(&*e.id, "");
+        assert_eq!(&*e.message, "world");
+    }
+}

@@ -35,6 +35,7 @@ pub trait ReportCollector: Send {
         key: DocumentKey,
         severity: ReportSeverity,
         messages: Vec<CheckError>,
+        total: usize,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     fn into_view(self) -> impl Future<Output = anyhow::Result<Self::View>> + Send;

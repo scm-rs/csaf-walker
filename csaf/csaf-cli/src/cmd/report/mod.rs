@@ -151,14 +151,12 @@ impl Report {
                                 },
                             };
 
+                            let messages = vec![CheckError::from(err.to_string())];
+                            let total = messages.len();
                             collector
                                 .lock()
                                 .await
-                                .insert(
-                                    name,
-                                    ReportSeverity::Error,
-                                    vec![CheckError::from(err.to_string())],
-                                )
+                                .insert(name, ReportSeverity::Error, messages, total)
                                 .await?;
                             return Ok::<_, anyhow::Error>(());
                         }
@@ -179,12 +177,13 @@ impl Report {
                             return Ok(());
                         }
 
+                        let total = items.values().map(|c| c.total).sum();
                         let checks = items.into_values().flatten().collect();
 
                         collector
                             .lock()
                             .await
-                            .insert(name.clone(), severity, checks)
+                            .insert(name.clone(), severity, checks, total)
                             .await?;
 
                         Ok(())

@@ -59,24 +59,24 @@ impl ReportCollector for FileBackedCollector {
         key: DocumentKey,
         severity: ReportSeverity,
         messages: Vec<CheckError>,
+        total: usize,
     ) -> anyhow::Result<()> {
         if messages.is_empty() {
             return Ok(());
         }
 
-        let count = messages.len();
         match severity {
             ReportSeverity::Error => {
                 self.error_count += 1;
-                self.error_total += count;
+                self.error_total += total;
             }
             ReportSeverity::Warning => {
                 self.warning_count += 1;
-                self.warning_total += count;
+                self.warning_total += total;
             }
             ReportSeverity::Info => {
                 self.info_count += 1;
-                self.info_total += count;
+                self.info_total += total;
             }
         }
 

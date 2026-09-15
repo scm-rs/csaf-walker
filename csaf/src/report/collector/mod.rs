@@ -35,29 +35,30 @@ mod test {
                 key("b.json"),
                 ReportSeverity::Warning,
                 vec![check("warn1"), check("warn2")],
+                2,
             )
             .await
             .unwrap();
         collector
-            .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")])
+            .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")], 1)
             .await
             .unwrap();
         collector
-            .insert(key("b.json"), ReportSeverity::Warning, vec![check("warn4")])
-            .await
-            .unwrap();
-
-        collector
-            .insert(key("c.json"), ReportSeverity::Error, vec![check("err1")])
-            .await
-            .unwrap();
-        collector
-            .insert(key("c.json"), ReportSeverity::Error, vec![check("err2")])
+            .insert(key("b.json"), ReportSeverity::Warning, vec![check("warn4")], 1)
             .await
             .unwrap();
 
         collector
-            .insert(key("d.json"), ReportSeverity::Warning, vec![])
+            .insert(key("c.json"), ReportSeverity::Error, vec![check("err1")], 1)
+            .await
+            .unwrap();
+        collector
+            .insert(key("c.json"), ReportSeverity::Error, vec![check("err2")], 1)
+            .await
+            .unwrap();
+
+        collector
+            .insert(key("d.json"), ReportSeverity::Warning, vec![], 0)
             .await
             .unwrap();
 
@@ -66,7 +67,7 @@ mod test {
         assert_eq!(view.count(&ReportSeverity::Warning), 2);
         assert_eq!(view.total(&ReportSeverity::Warning), 4);
         assert_eq!(view.count(&ReportSeverity::Error), 1);
-        assert_eq!(view.total(&ReportSeverity::Error), 1);
+        assert_eq!(view.total(&ReportSeverity::Error), 2);
 
         // sorted by key, grouped
         let mut warning_keys = Vec::new();
@@ -108,21 +109,22 @@ mod test {
                 key("a.json"),
                 ReportSeverity::Warning,
                 vec![check("warn1"), check("warn2")],
+                2,
             )
             .await
             .unwrap();
         collector
-            .insert(key("b.json"), ReportSeverity::Error, vec![check("err1")])
+            .insert(key("b.json"), ReportSeverity::Error, vec![check("err1")], 1)
             .await
             .unwrap();
         collector
-            .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")])
+            .insert(key("a.json"), ReportSeverity::Warning, vec![check("warn3")], 1)
             .await
             .unwrap();
 
         // empty insert is a no-op
         collector
-            .insert(key("c.json"), ReportSeverity::Warning, vec![])
+            .insert(key("c.json"), ReportSeverity::Warning, vec![], 0)
             .await
             .unwrap();
 
@@ -166,5 +168,67 @@ mod test {
         .unwrap();
         assert_eq!(error_entries.len(), 1);
         assert_eq!(error_entries[0].1, vec!["err1"]);
+    }
+
+    #[tokio::test]
+    async fn in_memory_collector_uncapped_totals() {
+        let mut collector = InMemoryCollector::new();
+
+        collector
+            .insert(
+                key("a.json"),
+                ReportSeverity::Error,
+                vec![check("e1"), check("e2"), check("threshold reached")],
+                50,
+            )
+            .await
+            .unwrap();
+        collector
+            .insert(
+                key("b.json"),
+                ReportSeverity::Warning,
+                vec![check("w1")],
+                30,
+            )
+            .await
+            .unwrap();
+
+        let view = collector.into_view().await.unwrap();
+
+        assert_eq!(view.count(&ReportSeverity::Error), 1);
+        assert_eq!(view.total(&ReportSeverity::Error), 50);
+        assert_eq!(view.count(&ReportSeverity::Warning), 1);
+        assert_eq!(view.total(&ReportSeverity::Warning), 30);
+    }
+
+    #[tokio::test]
+    async fn file_backed_collector_uncapped_totals() {
+        let mut collector = FileBackedCollector::new().unwrap();
+
+        collector
+            .insert(
+                key("a.json"),
+                ReportSeverity::Error,
+                vec![check("e1"), check("e2"), check("threshold reached")],
+                50,
+            )
+            .await
+            .unwrap();
+        collector
+            .insert(
+                key("b.json"),
+                ReportSeverity::Warning,
+                vec![check("w1")],
+                30,
+            )
+            .await
+            .unwrap();
+
+        let view = collector.into_view().await.unwrap();
+
+        assert_eq!(view.count(&ReportSeverity::Error), 1);
+        assert_eq!(view.total(&ReportSeverity::Error), 50);
+        assert_eq!(view.count(&ReportSeverity::Warning), 1);
+        assert_eq!(view.total(&ReportSeverity::Warning), 30);
     }
 }

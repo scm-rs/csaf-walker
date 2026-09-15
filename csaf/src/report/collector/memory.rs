@@ -6,6 +6,9 @@ pub struct InMemoryView {
     errors: BTreeMap<DocumentKey, Vec<CheckError>>,
     warnings: BTreeMap<DocumentKey, Vec<CheckError>>,
     infos: BTreeMap<DocumentKey, Vec<CheckError>>,
+    error_total: usize,
+    warning_total: usize,
+    info_total: usize,
 }
 
 impl Default for InMemoryView {
@@ -20,6 +23,9 @@ impl InMemoryView {
             errors: BTreeMap::new(),
             warnings: BTreeMap::new(),
             infos: BTreeMap::new(),
+            error_total: 0,
+            warning_total: 0,
+            info_total: 0,
         }
     }
 
@@ -38,7 +44,11 @@ impl ReportView for InMemoryView {
     }
 
     fn total(&self, severity: &ReportSeverity) -> usize {
-        self.map_for(severity).values().map(|v| v.len()).sum()
+        match severity {
+            ReportSeverity::Error => self.error_total,
+            ReportSeverity::Warning => self.warning_total,
+            ReportSeverity::Info => self.info_total,
+        }
     }
 
     fn for_each(
@@ -79,6 +89,7 @@ impl ReportCollector for InMemoryCollector {
         key: DocumentKey,
         severity: ReportSeverity,
         messages: Vec<CheckError>,
+        total: usize,
     ) -> anyhow::Result<()> {
         if messages.is_empty() {
             return Ok(());
@@ -86,12 +97,15 @@ impl ReportCollector for InMemoryCollector {
         match severity {
             ReportSeverity::Error => {
                 self.view.errors.insert(key, messages);
+                self.view.error_total += total;
             }
             ReportSeverity::Warning => {
                 self.view.warnings.entry(key).or_default().extend(messages);
+                self.view.warning_total += total;
             }
             ReportSeverity::Info => {
                 self.view.infos.entry(key).or_default().extend(messages);
+                self.view.info_total += total;
             }
         }
         Ok(())

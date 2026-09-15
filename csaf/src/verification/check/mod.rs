@@ -13,8 +13,8 @@ pub struct Capping {
     cap: usize,
     /// The total number of entries (even when capped)
     total: usize,
-    /// The actual content
-    items: HashMap<Arc<str>, Vec<CheckError>>,
+    /// Per-ID push count and stored items
+    items: HashMap<Arc<str>, (usize, Vec<CheckError>)>,
 }
 
 impl Capping {
@@ -29,14 +29,14 @@ impl Capping {
     pub fn finish(self) -> Capped {
         let mut result = Vec::new();
 
-        for (id, mut items) in self.items {
-            if items.len() == self.cap {
+        for (id, (pushed, mut items)) in self.items {
+            let omitted = pushed - items.len();
+            if omitted > 0 {
                 items.push(CheckError {
                     id: id.clone(),
                     message: Arc::from(format!(
                         "threshold of {cap} reached, {omitted} issues omitted",
                         cap = self.cap,
-                        omitted = self.total - self.cap,
                     )),
                 })
             }
@@ -51,11 +51,10 @@ impl Capping {
     }
 
     pub fn push(&mut self, item: CheckError) {
-        // always uptick
         self.total += 1;
 
-        // now add it we have room
-        let items = self.items.entry(item.id.clone()).or_default();
+        let (pushed, items) = self.items.entry(item.id.clone()).or_default();
+        *pushed += 1;
 
         if items.len() < self.cap {
             items.push(item);
@@ -228,5 +227,167 @@ impl Check for CsafValidation {
             Csaf::V2_0(csaf) => self.validate(csaf),
             Csaf::V2_1(csaf) => self.validate(csaf),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rstest::rstest;
+
+    fn err(id: &str, msg: &str) -> CheckError {
+        CheckError {
+            id: Arc::from(id),
+            message: Arc::from(msg),
+        }
+    }
+
+    fn messages(capped: &Capped) -> Vec<String> {
+        capped.items.iter().map(|e| e.message.to_string()).collect()
+    }
+
+    // --- Capping: single-ID parameterized tests ---
+
+    #[rstest]
+    #[case::empty(5, 0, 0, vec![])]
+    #[case::under_cap(5, 2, 2, vec!["msg0", "msg1"])]
+    #[case::at_cap(3, 3, 3, vec!["msg0", "msg1", "msg2"])]
+    #[case::over_cap(3, 7, 7, vec!["msg0", "msg1", "msg2", "threshold of 3 reached, 4 issues omitted"])]
+    #[case::cap_zero(0, 2, 2, vec!["threshold of 0 reached, 2 issues omitted"])]
+    #[case::cap_one_over(1, 2, 2, vec!["msg0", "threshold of 1 reached, 1 issues omitted"])]
+    #[case::cap_one_exact(1, 1, 1, vec!["msg0"])]
+    fn capping_single_id(
+        #[case] cap: usize,
+        #[case] pushes: usize,
+        #[case] expected_total: usize,
+        #[case] expected_messages: Vec<&str>,
+    ) {
+        let mut c = Capping::new(cap);
+        for i in 0..pushes {
+            c.push(err("A", &format!("msg{i}")));
+        }
+
+        let result = c.finish();
+        assert_eq!(result.total, expected_total);
+        assert_eq!(messages(&result), expected_messages);
+    }
+
+    // --- Capping: multi-ID and extend ---
+
+    #[test]
+    fn capping_per_id_isolation() {
+        let mut c = Capping::new(2);
+        c.push(err("A", "a1"));
+        c.push(err("A", "a2"));
+        c.push(err("A", "a3")); // over cap for A
+        c.push(err("B", "b1")); // under cap for B
+
+        let result = c.finish();
+        assert_eq!(result.total, 4);
+
+        let a_msgs: Vec<_> = result
+            .items
+            .iter()
+            .filter(|e| &*e.id == "A")
+            .map(|e| e.message.to_string())
+            .collect();
+        assert_eq!(
+            a_msgs,
+            vec!["a1", "a2", "threshold of 2 reached, 1 issues omitted"]
+        );
+
+        let b_msgs: Vec<_> = result
+            .items
+            .iter()
+            .filter(|e| &*e.id == "B")
+            .map(|e| e.message.to_string())
+            .collect();
+        assert_eq!(b_msgs, vec!["b1"]);
+    }
+
+    #[test]
+    fn capping_extend() {
+        let mut c = Capping::new(2);
+        let items = vec![err("A", "e1"), err("A", "e2"), err("A", "e3")];
+        (&mut c).extend(items);
+
+        let result = c.finish();
+        assert_eq!(result.total, 3);
+        assert_eq!(
+            messages(&result),
+            vec!["e1", "e2", "threshold of 2 reached, 1 issues omitted"]
+        );
+    }
+
+    #[test]
+    fn capping_total_is_uncapped() {
+        let mut c = Capping::new(3);
+        for i in 0..10 {
+            c.push(err("A", &format!("msg{i}")));
+        }
+        let result = c.finish();
+        assert_eq!(result.total, 10);
+        assert_eq!(result.items.len(), 4); // 3 stored + 1 threshold message
+    }
+
+    // --- CheckResult tests ---
+
+    #[test]
+    fn check_result_default_is_ok() {
+        let r = CheckResult::default();
+        assert!(r.is_ok());
+        assert_eq!(r.total(), 0);
+    }
+
+    #[rstest]
+    #[case::errors(
+        CheckResult { errors: vec![err("A", "e")].into_iter().collect(), ..Default::default() }
+    )]
+    #[case::warnings(
+        CheckResult { warnings: vec![err("A", "w")].into_iter().collect(), ..Default::default() }
+    )]
+    #[case::infos(
+        CheckResult { infos: vec![err("A", "i")].into_iter().collect(), ..Default::default() }
+    )]
+    fn check_result_is_not_ok(#[case] r: CheckResult) {
+        assert!(!r.is_ok());
+    }
+
+    #[test]
+    fn check_result_total_reflects_uncapped_counts() {
+        let r = CheckResult {
+            errors: Capped {
+                items: vec![err("A", "e1")],
+                total: 50,
+            },
+            warnings: Capped {
+                items: vec![],
+                total: 30,
+            },
+            infos: Capped {
+                items: vec![err("A", "i1"), err("A", "i2")],
+                total: 20,
+            },
+        };
+        // total() sums Capped.total, not items.len()
+        assert_eq!(r.total(), 100);
+        assert_eq!(r.errors.items.len(), 1);
+        assert_eq!(r.warnings.items.len(), 0);
+        assert_eq!(r.infos.items.len(), 2);
+    }
+
+    // --- CsafValidation config tests ---
+
+    #[test]
+    fn default_max_issues() {
+        assert_eq!(DEFAULT_MAX_ISSUES_PER_TEST, 25);
+        let v = CsafValidation::new("optional");
+        assert_eq!(v.max_issues_per_test, 25);
+    }
+
+    #[test]
+    fn custom_max_issues() {
+        let v = CsafValidation::new("optional").with_max_issues_per_test(100);
+        assert_eq!(v.max_issues_per_test, 100);
     }
 }

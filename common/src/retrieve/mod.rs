@@ -27,7 +27,7 @@ pub struct RetrievedDigest<D: Digest> {
 impl<D: Digest> RetrievedDigest<D> {
     pub fn validate(&self) -> Result<(), (&str, String)> {
         let actual = Hex(&self.actual).to_lower();
-        if self.expected == actual {
+        if self.expected.eq_ignore_ascii_case(&actual) {
             Ok(())
         } else {
             Err((&self.expected, actual))
@@ -80,6 +80,35 @@ where
             expected: value.expected,
             actual: value.current.finalize(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+    use sha2::Sha256;
+
+    #[rstest]
+    #[case::lowercase("916f0027a575074ce72a331777c3478d6513f786a591bd892da1a577bf2335f9")]
+    #[case::uppercase("916F0027A575074CE72A331777C3478D6513F786A591BD892DA1A577BF2335F9")]
+    #[case::mixed_case("916F0027a575074ce72A331777C3478d6513F786a591BD892da1A577bf2335F9")]
+    fn validate_digest_case_insensitive(#[case] expected: &str) {
+        let digest = RetrievedDigest::<Sha256> {
+            expected: expected.to_string(),
+            actual: Sha256::digest(b"test data"),
+        };
+        assert!(digest.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_digest_mismatch() {
+        let digest = RetrievedDigest::<Sha256> {
+            expected: "0000000000000000000000000000000000000000000000000000000000000000"
+                .to_string(),
+            actual: Sha256::digest(b"test data"),
+        };
+        assert!(digest.validate().is_err());
     }
 }
 

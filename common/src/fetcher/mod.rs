@@ -6,6 +6,7 @@ pub use data::*;
 
 use crate::http::{calculate_retry_after_from_response_header, get_client_error};
 use reqwest::{Client, ClientBuilder, IntoUrl, Method, Response, StatusCode};
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::future::Future;
 use std::marker::PhantomData;
@@ -43,6 +44,7 @@ pub struct FetcherOptions {
     retries: usize,
     default_retry_after: Duration,
     max_retry_after: Duration,
+    user_agent: Cow<'static, str>,
 }
 
 impl FetcherOptions {
@@ -54,6 +56,12 @@ impl FetcherOptions {
     /// Set the timeout.
     pub fn timeout(mut self, timeout: impl Into<Duration>) -> Self {
         self.timeout = timeout.into();
+        self
+    }
+
+    /// Set the user agent used for requests.
+    pub fn user_agent(mut self, user_agent: impl Into<Cow<'static, str>>) -> Self {
+        self.user_agent = user_agent.into();
         self
     }
 
@@ -91,6 +99,7 @@ impl Default for FetcherOptions {
             retries: 5,
             default_retry_after: Duration::from_secs(10),
             max_retry_after: Duration::from_mins(5),
+            user_agent: Cow::Borrowed(crate::USER_AGENT),
         }
     }
 }
@@ -104,7 +113,9 @@ impl From<Client> for Fetcher {
 impl Fetcher {
     /// Create a new downloader from options
     pub async fn new(options: FetcherOptions) -> anyhow::Result<Self> {
-        let client = ClientBuilder::new().timeout(options.timeout);
+        let client = ClientBuilder::new()
+            .timeout(options.timeout)
+            .user_agent(options.user_agent.as_ref());
 
         Ok(Self::with_client(client.build()?, options))
     }

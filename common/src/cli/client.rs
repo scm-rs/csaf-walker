@@ -14,6 +14,10 @@ pub struct ClientArguments {
     /// Per-request minimum delay after rate limit (429).
     #[arg(long, default_value = "10s")]
     pub default_retry_after: humantime::Duration,
+
+    /// The user agent to send with requests.
+    #[arg(long, default_value = crate::USER_AGENT)]
+    pub user_agent: String,
 }
 
 impl From<ClientArguments> for FetcherOptions {
@@ -22,6 +26,7 @@ impl From<ClientArguments> for FetcherOptions {
             .timeout(value.timeout)
             .retries(value.retries)
             .retry_after(value.default_retry_after.into())
+            .user_agent(value.user_agent)
     }
 }
 

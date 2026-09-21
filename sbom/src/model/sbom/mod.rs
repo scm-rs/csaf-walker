@@ -123,7 +123,7 @@ impl Sbom {
 
         #[cfg(feature = "serde-cyclonedx")]
         let err = match Self::is_cyclondx_json(&json) {
-            Ok("1.4" | "1.5" | "1.6") => {
+            Ok("1.4" | "1.5" | "1.6" | "1.7") => {
                 return Self::try_serde_cyclonedx_json(JsonPayload::Value(json)).map_err(|e| {
                     // drop any previous error, as we know what format and version it is
                     ParseAnyError::from((ParserKind::Cyclone13DxJson, e.into()))

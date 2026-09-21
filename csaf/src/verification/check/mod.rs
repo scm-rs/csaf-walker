@@ -56,7 +56,7 @@ impl Capping {
         let (pushed, items) = self.items.entry(item.id.clone()).or_default();
         *pushed += 1;
 
-        if items.len() < self.cap {
+        if self.cap == 0 || items.len() < self.cap {
             items.push(item);
         }
     }
@@ -253,7 +253,7 @@ mod test {
     #[case::under_cap(5, 2, 2, vec!["msg0", "msg1"])]
     #[case::at_cap(3, 3, 3, vec!["msg0", "msg1", "msg2"])]
     #[case::over_cap(3, 7, 7, vec!["msg0", "msg1", "msg2", "threshold of 3 reached, 4 issues omitted"])]
-    #[case::cap_zero(0, 2, 2, vec!["threshold of 0 reached, 2 issues omitted"])]
+    #[case::cap_zero(0, 2, 2, vec!["msg0", "msg1"])]
     #[case::cap_one_over(1, 2, 2, vec!["msg0", "threshold of 1 reached, 1 issues omitted"])]
     #[case::cap_one_exact(1, 1, 1, vec!["msg0"])]
     fn capping_single_id(

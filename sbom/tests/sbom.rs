@@ -1,6 +1,9 @@
-use parking_lot::Mutex;
-use sbom_walker::report;
-use std::{collections::BTreeMap, sync::Arc};
+#[cfg(feature = "serde-cyclonedx")]
+use {
+    parking_lot::Mutex,
+    sbom_walker::report,
+    std::{collections::BTreeMap, sync::Arc},
+};
 
 #[cfg(feature = "cyclonedx-bom")]
 #[test]
@@ -26,7 +29,7 @@ fn test_cyclonedx_v17_json() {
     assert_eq!(sbom.citations.iter().flatten().count(), 1);
 }
 
-#[cfg(any(feature = "cyclonedx-bom", feature = "serde-cyclonedx"))]
+#[cfg(feature = "serde-cyclonedx")]
 #[test]
 fn cyclonedx_v17_inspect() {
     let sbom = sbom_walker::Sbom::try_parse_any(include_bytes!("data/cyclonedx.v1_7.json"))
@@ -42,7 +45,7 @@ fn cyclonedx_v17_inspect() {
     assert_eq!(result.len(), 0);
 }
 
-#[cfg(any(feature = "cyclonedx-bom", feature = "serde-cyclonedx"))]
+#[cfg(feature = "serde-cyclonedx")]
 #[test]
 fn issue_57_inspect() {
     let sbom = sbom_walker::Sbom::try_parse_any(include_bytes!("data/issue_57/sbom.json"))

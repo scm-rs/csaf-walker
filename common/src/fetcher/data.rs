@@ -96,3 +96,46 @@ impl<D: Data> Data for Option<D> {
         Ok(Some(D::from_response(response).await?))
     }
 }
+
+/// Like `Option<D>`, but treats any 4xx client error as `None`.
+///
+/// Use this for auxiliary resources (signatures, digests) where the server may
+/// return 403 or another client error instead of 404 when the file does not
+/// exist or is not accessible.
+pub struct Lenient<D>(pub Option<D>);
+
+impl<D> Lenient<D> {
+    pub fn into_inner(self) -> Option<D> {
+        self.0
+    }
+}
+
+impl<D> From<Lenient<D>> for Option<D> {
+    fn from(lenient: Lenient<D>) -> Self {
+        lenient.0
+    }
+}
+
+impl<D> Deref for Lenient<D> {
+    type Target = Option<D>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<D> DerefMut for Lenient<D> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<D: Data> Data for Lenient<D> {
+    async fn from_response(response: Response) -> Result<Self, reqwest::Error> {
+        if response.status().is_client_error() {
+            return Ok(Lenient(None));
+        }
+
+        Ok(Lenient(Some(D::from_response(response).await?)))
+    }
+}

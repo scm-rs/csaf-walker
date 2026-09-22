@@ -183,9 +183,9 @@ impl<S: Source, P: Progress> Walker<S, P> {
     ///
     /// # Examples
     ///
-    /// Only walk TLP:WHITE feeds:
+    /// Only walk TLP:CLEAR feeds:
     /// ```ignore
-    /// walker.with_tlp_filter(HashSet::from([TlpLabel::White]))
+    /// walker.with_tlp_filter(HashSet::from([TlpLabel::Clear]))
     /// ```
     ///
     /// Exclude TLP:GREEN and above (more restrictive):
@@ -222,10 +222,12 @@ impl<S: Source, P: Progress> Walker<S, P> {
                     true
                 }
             })
-            .filter(|distribution| match (self.tlp_filter.as_ref(), distribution.tlp_label()) {
-                (Some(filter), Some(label)) => filter.include(label),
-                _ => true,
-            })
+            .filter(
+                |distribution| match (self.tlp_filter.as_ref(), distribution.tlp_label()) {
+                    (Some(filter), Some(label)) => filter.include(label),
+                    _ => true,
+                },
+            )
             .collect()
     }
 
@@ -307,10 +309,13 @@ impl<S: Source, P: Progress> Walker<S, P> {
         let distributions = self.collect_distributions(metadata.distributions);
         log::info!("processing {} distribution URLs", distributions.len());
 
-        let advisories: Vec<_> =
-            collect_advisories::<V, S>(&self.source, distributions, &*self.distribution_error_handler)
-                .try_collect()
-                .await?;
+        let advisories: Vec<_> = collect_advisories::<V, S>(
+            &self.source,
+            distributions,
+            &*self.distribution_error_handler,
+        )
+        .try_collect()
+        .await?;
 
         let size = advisories.len();
         log::info!("Discovered {size} advisories");

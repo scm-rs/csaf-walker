@@ -46,7 +46,8 @@ where
 
 #[tokio::test]
 async fn test_successful_fetch() {
-    let server = start_mock_server(|_req| {
+    let server = start_mock_server(|req| {
+        assert!(!req.headers().contains_key("authorization"));
         hyper::Response::builder()
             .status(StatusCode::OK)
             .body("Hello, World!".to_string())
@@ -303,4 +304,109 @@ async fn test_configurable_default_retry_after(#[case] custom_default_secs: u64)
         "Expected less than 10s, got {:?}",
         elapsed
     );
+}
+
+#[rstest]
+#[case::bearer(vec!["--fetch-bearer-token", "secret"], "authorization", "Bearer secret")]
+#[case::header(vec!["--fetch-auth-header", " X-Api-Key : secret:with:colons "], "x-api-key", "secret:with:colons")]
+#[case::basic(vec!["--fetch-username", "user", "--fetch-password", "pass:word"], "authorization", "Basic dXNlcjpwYXNzOndvcmQ=")]
+#[case::empty_password(vec!["--fetch-username", "user", "--fetch-password", ""], "authorization", "Basic dXNlcjo=")]
+#[cfg(feature = "clap")]
+#[tokio::test]
+async fn test_cli_authentication(
+    #[case] arguments: Vec<&str>,
+    #[case] header: &'static str,
+    #[case] expected: &'static str,
+) {
+    use clap::Parser;
+    use walker_common::cli::client::ClientArguments;
+    let args = ClientArguments::try_parse_from(std::iter::once("test").chain(arguments)).unwrap();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let count = attempts.clone();
+    let server = start_mock_server(move |req| {
+        assert_eq!(req.headers()[header], expected);
+        let status = if count.fetch_add(1, Ordering::SeqCst) == 0 {
+            StatusCode::INTERNAL_SERVER_ERROR
+        } else {
+            StatusCode::OK
+        };
+        hyper::Response::builder()
+            .status(status)
+            .body("ok".into())
+            .unwrap()
+    })
+    .await;
+    let fetcher = args.new_fetcher().await.unwrap();
+    assert_eq!(fetcher.fetch::<String>(&server).await.unwrap(), "ok");
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+
+    struct StatusProcessor;
+    impl walker_common::fetcher::DataProcessor for StatusProcessor {
+        type Type = StatusCode;
+        async fn process(&self, response: reqwest::Response) -> Result<StatusCode, reqwest::Error> {
+            Ok(response.error_for_status()?.status())
+        }
+    }
+    assert_eq!(
+        fetcher
+            .fetch_processed(&server, StatusProcessor)
+            .await
+            .unwrap(),
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn test_authentication_validation_and_redaction() {
+    use walker_common::fetcher::FetchAuthentication;
+    let invalid = [
+        FetchAuthentication::Bearer("secret\r\ninjected".into()),
+        FetchAuthentication::Header {
+            name: "secret invalid".into(),
+            value: "secret".into(),
+        },
+        FetchAuthentication::Header {
+            name: "x-api-key".into(),
+            value: "secret\n".into(),
+        },
+        FetchAuthentication::Basic {
+            username: "secret:user".into(),
+            password: "secret".into(),
+        },
+    ];
+    for auth in invalid {
+        assert!(!format!("{auth:?}").contains("secret"));
+        let options = FetcherOptions::new().authentication(auth);
+        assert!(!format!("{options:?}").contains("secret"));
+        let error = Fetcher::new(options).await.unwrap_err();
+        assert!(!format!("{error:?}").contains("secret"));
+    }
+    let fetcher = Fetcher::new(
+        FetcherOptions::new().authentication(FetchAuthentication::Bearer("secret".into())),
+    )
+    .await
+    .unwrap();
+    assert!(!format!("{fetcher:?}").contains("secret"));
+}
+
+#[tokio::test]
+async fn test_authentication_replaces_previous_setting() {
+    use walker_common::fetcher::FetchAuthentication;
+    let server = start_mock_server(|req| {
+        assert_eq!(req.headers()["x-api-key"], "replacement");
+        assert!(!req.headers().contains_key("authorization"));
+        hyper::Response::new("ok".into())
+    })
+    .await;
+    let fetcher = Fetcher::new(
+        FetcherOptions::new()
+            .authentication(FetchAuthentication::Bearer("original".into()))
+            .authentication(FetchAuthentication::Header {
+                name: "x-api-key".into(),
+                value: "replacement".into(),
+            }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(fetcher.fetch::<String>(&server).await.unwrap(), "ok");
 }

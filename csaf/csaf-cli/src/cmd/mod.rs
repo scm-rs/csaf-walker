@@ -35,7 +35,7 @@ pub struct DistributionArguments {
     /// Only walk distributions with the given TLP label(s).
     ///
     /// Can be specified multiple times or as a comma-separated list.
-    /// Valid values: white, green, amber, red.
+    /// Valid values: clear (or white), green, amber, red.
     #[arg(long = "tlp", value_delimiter = ',')]
     pub tlp_labels: Vec<TlpLabel>,
 }

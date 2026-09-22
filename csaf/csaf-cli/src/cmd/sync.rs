@@ -1,5 +1,7 @@
 use crate::{
-    cmd::{DiscoverArguments, DistributionArguments, FilterArguments, SkipArguments, StoreArguments},
+    cmd::{
+        DiscoverArguments, DistributionArguments, FilterArguments, SkipArguments, StoreArguments,
+    },
     common::walk_visitor,
 };
 use csaf_walker::{

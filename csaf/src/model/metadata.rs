@@ -50,7 +50,9 @@ pub struct Feed {
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "lowercase")]
 pub enum TlpLabel {
-    White,
+    #[serde(alias = "WHITE")]
+    #[strum(serialize = "clear", serialize = "white")]
+    Clear,
     Green,
     Amber,
     Red,
@@ -63,7 +65,8 @@ fn deserialize_tlp_label<'de, D: Deserializer<'de>>(
     #[serde(rename_all = "UPPERCASE")]
     enum Raw {
         Unlabeled,
-        White,
+        #[serde(alias = "WHITE")]
+        Clear,
         Green,
         Amber,
         Red,
@@ -71,7 +74,7 @@ fn deserialize_tlp_label<'de, D: Deserializer<'de>>(
 
     Ok(match Raw::deserialize(deserializer)? {
         Raw::Unlabeled => None,
-        Raw::White => Some(TlpLabel::White),
+        Raw::Clear => Some(TlpLabel::Clear),
         Raw::Green => Some(TlpLabel::Green),
         Raw::Amber => Some(TlpLabel::Amber),
         Raw::Red => Some(TlpLabel::Red),
@@ -84,7 +87,7 @@ fn serialize_tlp_label<S: Serializer>(
 ) -> Result<S::Ok, S::Error> {
     match value {
         None => serializer.serialize_str("UNLABELED"),
-        Some(TlpLabel::White) => serializer.serialize_str("WHITE"),
+        Some(TlpLabel::Clear) => serializer.serialize_str("CLEAR"),
         Some(TlpLabel::Green) => serializer.serialize_str("GREEN"),
         Some(TlpLabel::Amber) => serializer.serialize_str("AMBER"),
         Some(TlpLabel::Red) => serializer.serialize_str("RED"),

@@ -1,6 +1,6 @@
 //! Discovering
 
-use crate::model::metadata::ProviderMetadata;
+use crate::model::metadata::{ProviderMetadata, TlpLabel};
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::Arc;
@@ -40,7 +40,10 @@ impl From<&str> for DiscoverConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DistributionContext {
     Directory(Url),
-    Feed(Url),
+    Feed {
+        url: Url,
+        tlp_label: Option<TlpLabel>,
+    },
 }
 
 impl DistributionContext {
@@ -48,7 +51,15 @@ impl DistributionContext {
     pub fn url(&self) -> &Url {
         match self {
             Self::Directory(url) => url,
-            Self::Feed(url) => url,
+            Self::Feed { url, .. } => url,
+        }
+    }
+
+    /// Get the TLP label, if available (only ROLIE feeds carry one).
+    pub fn tlp_label(&self) -> Option<&TlpLabel> {
+        match self {
+            Self::Directory(_) => None,
+            Self::Feed { tlp_label, .. } => tlp_label.as_ref(),
         }
     }
 }

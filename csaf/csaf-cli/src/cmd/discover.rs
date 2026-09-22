@@ -1,8 +1,12 @@
 use crate::{
-    cmd::{DiscoverArguments, FilterArguments},
+    cmd::{DiscoverArguments, DistributionArguments, FilterArguments},
     common::filter,
 };
-use csaf_walker::{discover::DiscoveredAdvisory, source::new_source, walker::Walker};
+use csaf_walker::{
+    discover::DiscoveredAdvisory,
+    source::new_source,
+    walker::{DistributionConfig, Walker},
+};
 use std::convert::Infallible;
 use walker_common::{
     cli::{CommandDefaults, client::ClientArguments},
@@ -20,6 +24,9 @@ pub struct Discover {
 
     #[command(flatten)]
     filter: FilterArguments,
+
+    #[command(flatten)]
+    distribution: DistributionArguments,
 }
 
 impl CommandDefaults for Discover {
@@ -30,8 +37,15 @@ impl CommandDefaults for Discover {
 
 impl Discover {
     pub async fn run<P: Progress + Clone>(self, progress: P) -> anyhow::Result<()> {
-        Walker::new(new_source(self.discover, self.client).await?)
-            .with_progress(progress.clone())
+        let distribution: DistributionConfig = self.distribution.into();
+        let mut walker = Walker::new(new_source(self.discover, self.client).await?)
+            .with_progress(progress.clone());
+
+        if let Some(tlp_filter) = distribution.tlp_filter {
+            walker = walker.with_tlp_filter(tlp_filter);
+        }
+
+        walker
             .walk(filter(
                 self.filter,
                 async |discovered: DiscoveredAdvisory| {

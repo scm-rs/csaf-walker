@@ -1,5 +1,5 @@
 use crate::{
-    cmd::{DiscoverArguments, FilterArguments, SkipArguments},
+    cmd::{DiscoverArguments, DistributionArguments, FilterArguments, SkipArguments},
     common::walk_visitor,
 };
 use csaf_walker::{
@@ -37,6 +37,9 @@ pub struct Send {
     filter: FilterArguments,
 
     #[command(flatten)]
+    distribution: DistributionArguments,
+
+    #[command(flatten)]
     validation: ValidationArguments,
 
     #[command(flatten)]
@@ -67,6 +70,7 @@ impl Send {
             self.client,
             DiscoverConfig::from(self.discover).with_since(since.since),
             self.filter,
+            self.distribution,
             self.runner,
             async move |source| {
                 Ok({

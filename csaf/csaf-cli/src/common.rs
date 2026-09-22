@@ -5,7 +5,7 @@ use csaf_walker::{
     source::{DispatchSource, new_source},
     validation::{ValidatedVisitor, ValidationVisitor},
     visitors::filter::{FilterConfig, FilteringVisitor},
-    walker::Walker,
+    walker::{DistributionConfig, Walker},
 };
 use std::future::Future;
 use walker_common::{
@@ -20,6 +20,7 @@ pub async fn walk_standard<V, P>(
     runner: RunnerArguments,
     discover: impl Into<DiscoverConfig>,
     filter: impl Into<FilterConfig>,
+    distribution: impl Into<DistributionConfig>,
     validation: ValidationArguments,
     visitor: V,
 ) -> anyhow::Result<()>
@@ -35,6 +36,7 @@ where
         client,
         discover,
         filter,
+        distribution,
         runner,
         async move |source| {
             Ok(RetrievingVisitor::new(
@@ -71,6 +73,7 @@ pub async fn walk_visitor<F, Fut, V, P>(
     client: ClientArguments,
     discover: impl Into<DiscoverConfig>,
     filter: impl Into<FilterConfig>,
+    distribution: impl Into<DistributionConfig>,
     runner: RunnerArguments,
     f: F,
 ) -> anyhow::Result<()>
@@ -83,13 +86,14 @@ where
 {
     let source = new_source(discover, client).await?;
 
-    walk_source(progress, source, filter, runner, f).await
+    walk_source(progress, source, filter, distribution, runner, f).await
 }
 
 pub async fn walk_source<F, Fut, V, P>(
     progress: P,
     source: DispatchSource,
     filter_config: impl Into<FilterConfig>,
+    distribution: impl Into<DistributionConfig>,
     runner: RunnerArguments,
     f: F,
 ) -> anyhow::Result<()>
@@ -101,7 +105,12 @@ where
     P: Progress,
 {
     let visitor = f(source.clone()).await?;
-    let walker = Walker::new(source).with_progress(progress);
+    let distribution = distribution.into();
+    let mut walker = Walker::new(source).with_progress(progress);
+
+    if let Some(filter) = distribution.tlp_filter {
+        walker = walker.with_tlp_filter(filter);
+    }
 
     match runner.workers {
         1 => {

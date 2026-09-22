@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -19,22 +20,75 @@ pub struct Rolie {
     pub services: Vec<Url>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Feed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    pub tlp_label: TlpLabel,
+    #[serde(
+        deserialize_with = "deserialize_tlp_label",
+        serialize_with = "serialize_tlp_label"
+    )]
+    pub tlp_label: Option<TlpLabel>,
     pub url: Url,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deserialize,
+    Serialize,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
+)]
 #[serde(rename_all = "UPPERCASE")]
+#[strum(serialize_all = "lowercase")]
 pub enum TlpLabel {
-    Unlabeled,
     White,
     Green,
     Amber,
     Red,
+}
+
+fn deserialize_tlp_label<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<TlpLabel>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "UPPERCASE")]
+    enum Raw {
+        Unlabeled,
+        White,
+        Green,
+        Amber,
+        Red,
+    }
+
+    Ok(match Raw::deserialize(deserializer)? {
+        Raw::Unlabeled => None,
+        Raw::White => Some(TlpLabel::White),
+        Raw::Green => Some(TlpLabel::Green),
+        Raw::Amber => Some(TlpLabel::Amber),
+        Raw::Red => Some(TlpLabel::Red),
+    })
+}
+
+fn serialize_tlp_label<S: Serializer>(
+    value: &Option<TlpLabel>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        None => serializer.serialize_str("UNLABELED"),
+        Some(TlpLabel::White) => serializer.serialize_str("WHITE"),
+        Some(TlpLabel::Green) => serializer.serialize_str("GREEN"),
+        Some(TlpLabel::Amber) => serializer.serialize_str("AMBER"),
+        Some(TlpLabel::Red) => serializer.serialize_str("RED"),
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]

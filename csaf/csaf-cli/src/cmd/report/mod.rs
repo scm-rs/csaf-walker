@@ -1,5 +1,5 @@
 use crate::{
-    cmd::{DiscoverArguments, FilterArguments, VerificationArguments},
+    cmd::{DiscoverArguments, DistributionArguments, FilterArguments, VerificationArguments},
     common::walk_visitor,
 };
 use csaf_walker::check::Capped;
@@ -53,6 +53,9 @@ pub struct Report {
 
     #[command(flatten)]
     filter: FilterArguments,
+
+    #[command(flatten)]
+    distribution: DistributionArguments,
 
     #[command(flatten)]
     validation: ValidationArguments,
@@ -212,6 +215,7 @@ impl Report {
                 self.client,
                 self.discover,
                 self.filter,
+                self.distribution,
                 self.runner,
                 async move |source| {
                     let visitor = RetrievingVisitor::new(source.clone(), visitor);

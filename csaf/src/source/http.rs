@@ -140,7 +140,7 @@ impl Source for HttpSource {
                     .collect::<Result<_, _>>()?)
             }
 
-            DistributionContext::Feed(feed) => {
+            DistributionContext::Feed { url: feed, .. } => {
                 let source_files = RolieSource::retrieve(&self.fetcher, feed.clone()).await?;
                 Ok(source_files
                     .files

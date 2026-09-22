@@ -1,5 +1,5 @@
 use crate::{
-    cmd::{DiscoverArguments, FilterArguments, SkipArguments, StoreArguments},
+    cmd::{DiscoverArguments, DistributionArguments, FilterArguments, SkipArguments, StoreArguments},
     common::walk_visitor,
 };
 use csaf_walker::{
@@ -34,6 +34,9 @@ pub struct Sync {
     filter: FilterArguments,
 
     #[command(flatten)]
+    distribution: DistributionArguments,
+
+    #[command(flatten)]
     validation: ValidationArguments,
 
     #[command(flatten)]
@@ -65,6 +68,7 @@ impl Sync {
             self.client,
             DiscoverConfig::from(self.discover).with_since(since.since),
             self.filter,
+            self.distribution,
             self.runner,
             async move |source| {
                 let visitor = {

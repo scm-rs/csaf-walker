@@ -1,5 +1,5 @@
 use crate::{
-    cmd::{DiscoverArguments, FilterArguments, SkipArguments},
+    cmd::{DiscoverArguments, DistributionArguments, FilterArguments, SkipArguments},
     common::walk_visitor,
 };
 use colored_json::write_colored_json;
@@ -31,6 +31,9 @@ pub struct Fetch {
 
     #[command(flatten)]
     filter: FilterArguments,
+
+    #[command(flatten)]
+    distribution: DistributionArguments,
 
     #[command(flatten)]
     validation: ValidationArguments,
@@ -108,6 +111,7 @@ impl Fetch {
             self.client,
             DiscoverConfig::from(self.discover).with_since(since.since),
             self.filter,
+            self.distribution,
             self.runner,
             async |source| {
                 let validation = ValidationVisitor::new(show).with_options(options);

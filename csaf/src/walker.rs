@@ -2,11 +2,11 @@
 
 use crate::{
     discover::{DiscoveredAdvisory, DiscoveredContext, DiscoveredVisitor, DistributionContext},
-    model::metadata::Distribution,
+    model::metadata::{Distribution, TlpLabel},
     source::Source,
 };
 use futures::{Stream, StreamExt, TryFutureExt, TryStream, TryStreamExt, stream};
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashSet, fmt::Debug, ops::RangeBounds, sync::Arc};
 use tokio::sync::Mutex;
 use url::ParseError;
 use walker_common::progress::{Progress, ProgressBar};
@@ -27,10 +27,106 @@ where
 
 pub type DistributionFilter = Box<dyn Fn(&DistributionContext) -> bool>;
 
+/// Handles errors that occur when fetching a distribution's index.
+///
+/// Return `Ok(())` to skip the distribution and continue walking.
+/// Return `Err(e)` to abort the walk with the error.
+pub trait DistributionErrorHandler<E> {
+    fn handle(&self, ctx: &DistributionContext, error: E) -> Result<(), E>;
+}
+
+impl<E> DistributionErrorHandler<E> for () {
+    fn handle(&self, _ctx: &DistributionContext, error: E) -> Result<(), E> {
+        Err(error)
+    }
+}
+
+impl<F, E> DistributionErrorHandler<E> for F
+where
+    F: Fn(&DistributionContext, E) -> Result<(), E>,
+{
+    fn handle(&self, ctx: &DistributionContext, error: E) -> Result<(), E> {
+        (self)(ctx, error)
+    }
+}
+
+/// Filters distributions by their TLP label.
+///
+/// Returns `true` to include the distribution, `false` to skip it.
+pub trait TlpFilter {
+    fn include(&self, label: &TlpLabel) -> bool;
+}
+
+impl TlpFilter for HashSet<TlpLabel> {
+    fn include(&self, label: &TlpLabel) -> bool {
+        self.contains(label)
+    }
+}
+
+impl<F> TlpFilter for F
+where
+    F: Fn(&TlpLabel) -> bool,
+{
+    fn include(&self, label: &TlpLabel) -> bool {
+        (self)(label)
+    }
+}
+
+impl TlpFilter for Box<dyn TlpFilter> {
+    fn include(&self, label: &TlpLabel) -> bool {
+        (**self).include(label)
+    }
+}
+
+macro_rules! impl_tlp_filter_for_range {
+    ($($range:ty),* $(,)?) => {
+        $(
+            impl TlpFilter for $range {
+                fn include(&self, label: &TlpLabel) -> bool {
+                    !RangeBounds::contains(self, label)
+                }
+            }
+        )*
+    };
+}
+
+impl_tlp_filter_for_range!(
+    std::ops::Range<TlpLabel>,
+    std::ops::RangeFrom<TlpLabel>,
+    std::ops::RangeTo<TlpLabel>,
+    std::ops::RangeInclusive<TlpLabel>,
+    std::ops::RangeToInclusive<TlpLabel>,
+    std::ops::RangeFull,
+);
+
+/// Configuration for how distributions are collected and filtered.
+pub struct DistributionConfig {
+    pub tlp_filter: Option<Box<dyn TlpFilter>>,
+}
+
+impl Default for DistributionConfig {
+    fn default() -> Self {
+        Self { tlp_filter: None }
+    }
+}
+
+impl DistributionConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_tlp_filter(mut self, filter: impl TlpFilter + 'static) -> Self {
+        self.tlp_filter = Some(Box::new(filter));
+        self
+    }
+}
+
 pub struct Walker<S: Source, P: Progress> {
     source: S,
     progress: P,
     distribution_filter: Option<DistributionFilter>,
+    distribution_error_handler: Box<dyn DistributionErrorHandler<S::Error>>,
+    tlp_filter: Option<Box<dyn TlpFilter>>,
 }
 
 impl<S: Source> Walker<S, ()> {
@@ -39,6 +135,8 @@ impl<S: Source> Walker<S, ()> {
             source,
             progress: (),
             distribution_filter: None,
+            distribution_error_handler: Box::new(()),
+            tlp_filter: None,
         }
     }
 }
@@ -49,6 +147,8 @@ impl<S: Source, P: Progress> Walker<S, P> {
             progress,
             source: self.source,
             distribution_filter: self.distribution_filter,
+            distribution_error_handler: self.distribution_error_handler,
+            tlp_filter: self.tlp_filter,
         }
     }
 
@@ -64,6 +164,39 @@ impl<S: Source, P: Progress> Walker<S, P> {
         self
     }
 
+    /// Set a handler for errors that occur when fetching a distribution's index.
+    ///
+    /// When a distribution fetch fails, the handler decides whether to skip it (return `Ok(())`)
+    /// or abort the walk (return `Err`). The default handler aborts on any error.
+    pub fn with_distribution_error_handler(
+        mut self,
+        handler: impl DistributionErrorHandler<S::Error> + 'static,
+    ) -> Self {
+        self.distribution_error_handler = Box::new(handler);
+        self
+    }
+
+    /// Filter distributions by TLP label.
+    ///
+    /// Distributions whose TLP label is not accepted by the filter will be skipped.
+    /// Directory distributions (which carry no TLP label) are always included.
+    ///
+    /// # Examples
+    ///
+    /// Only walk TLP:WHITE feeds:
+    /// ```ignore
+    /// walker.with_tlp_filter(HashSet::from([TlpLabel::White]))
+    /// ```
+    ///
+    /// Exclude TLP:GREEN and above (more restrictive):
+    /// ```ignore
+    /// walker.with_tlp_filter(TlpLabel::Green..)
+    /// ```
+    pub fn with_tlp_filter(mut self, filter: impl TlpFilter + 'static) -> Self {
+        self.tlp_filter = Some(Box::new(filter));
+        self
+    }
+
     fn collect_distributions(&self, distributions: Vec<Distribution>) -> Vec<DistributionContext> {
         distributions
             .into_iter()
@@ -72,7 +205,10 @@ impl<S: Source, P: Progress> Walker<S, P> {
                     .rolie
                     .into_iter()
                     .flat_map(|rolie| rolie.feeds)
-                    .map(|feed| DistributionContext::Feed(feed.url))
+                    .map(|feed| DistributionContext::Feed {
+                        url: feed.url,
+                        tlp_label: feed.tlp_label,
+                    })
                     .chain(
                         distribution
                             .directory_url
@@ -85,6 +221,10 @@ impl<S: Source, P: Progress> Walker<S, P> {
                 } else {
                     true
                 }
+            })
+            .filter(|distribution| match (self.tlp_filter.as_ref(), distribution.tlp_label()) {
+                (Some(filter), Some(label)) => filter.include(label),
+                _ => true,
             })
             .collect()
     }
@@ -107,11 +247,15 @@ impl<S: Source, P: Progress> Walker<S, P> {
 
         for distribution in distributions {
             log::info!("Walking directory URL: {distribution:?}");
-            let index = self
-                .source
-                .load_index(distribution)
-                .await
-                .map_err(Error::Source)?;
+            let index = match self.source.load_index(distribution.clone()).await {
+                Ok(index) => index,
+                Err(e) => {
+                    self.distribution_error_handler
+                        .handle(&distribution, e)
+                        .map_err(Error::Source)?;
+                    continue;
+                }
+            };
 
             let mut progress = self.progress.start(index.len());
 
@@ -163,9 +307,10 @@ impl<S: Source, P: Progress> Walker<S, P> {
         let distributions = self.collect_distributions(metadata.distributions);
         log::info!("processing {} distribution URLs", distributions.len());
 
-        let advisories: Vec<_> = collect_advisories::<V, S>(&self.source, distributions)
-            .try_collect()
-            .await?;
+        let advisories: Vec<_> =
+            collect_advisories::<V, S>(&self.source, distributions, &*self.distribution_error_handler)
+                .try_collect()
+                .await?;
 
         let size = advisories.len();
         log::info!("Discovered {size} advisories");
@@ -201,24 +346,29 @@ impl<S: Source, P: Progress> Walker<S, P> {
 fn collect_sources<'s, V: DiscoveredVisitor, S: Source>(
     source: &'s S,
     discover_contexts: Vec<DistributionContext>,
+    error_handler: &'s dyn DistributionErrorHandler<S::Error>,
 ) -> impl TryStream<Ok = impl Stream<Item = DiscoveredAdvisory>, Error = Error<V::Error, S::Error>> + 's
 {
     stream::iter(discover_contexts).then(async |discover_context| {
         log::debug!("Walking: {}", discover_context.url());
-        Ok(stream::iter(
-            source
-                .load_index(discover_context.clone())
-                .await
-                .map_err(Error::Source)?,
-        ))
+        match source.load_index(discover_context.clone()).await {
+            Ok(index) => Ok(stream::iter(index)),
+            Err(e) => {
+                error_handler
+                    .handle(&discover_context, e)
+                    .map_err(Error::Source)?;
+                Ok(stream::iter(vec![]))
+            }
+        }
     })
 }
 
 fn collect_advisories<'s, V: DiscoveredVisitor + 's, S: Source>(
     source: &'s S,
     discover_contexts: Vec<DistributionContext>,
+    error_handler: &'s dyn DistributionErrorHandler<S::Error>,
 ) -> impl TryStream<Ok = DiscoveredAdvisory, Error = Error<V::Error, S::Error>> + 's {
-    collect_sources::<V, S>(source, discover_contexts)
+    collect_sources::<V, S>(source, discover_contexts, error_handler)
         .map_ok(|s| s.map(Ok))
         .try_flatten()
 }

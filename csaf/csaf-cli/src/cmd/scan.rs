@@ -1,5 +1,5 @@
 use crate::{
-    cmd::{DiscoverArguments, FilterArguments},
+    cmd::{DiscoverArguments, DistributionArguments, FilterArguments},
     common::walk_standard,
 };
 use csaf_walker::verification::Csaf;
@@ -31,6 +31,9 @@ pub struct Scan {
     filter: FilterArguments,
 
     #[command(flatten)]
+    distribution: DistributionArguments,
+
+    #[command(flatten)]
     validation: ValidationArguments,
 }
 
@@ -44,6 +47,7 @@ impl Scan {
             self.runner,
             self.discover,
             self.filter,
+            self.distribution,
             self.validation,
             async |advisory: Result<ValidatedAdvisory, ValidationError<DispatchSource>>| {
                 match advisory {

@@ -1,7 +1,11 @@
 use anyhow::Context;
-use csaf_walker::visitors::{filter::FilterConfig, store::StoreVisitor};
+use csaf_walker::{
+    model::metadata::TlpLabel,
+    visitors::{filter::FilterConfig, store::StoreVisitor},
+    walker::DistributionConfig,
+};
 use flexible_time::timestamp::StartTimestamp;
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 use walker_common::cli::parser::parse_allow_client_errors;
 
 pub mod discover;
@@ -23,6 +27,28 @@ pub struct DiscoverArguments {
     ///
     /// CSAF trusted provider base domain (e.g. `redhat.com`), the full URL to the provider metadata file, or a local `file:` source.
     pub source: String,
+}
+
+#[derive(Debug, clap::Parser)]
+#[command(next_help_heading = "Distributions")]
+pub struct DistributionArguments {
+    /// Only walk distributions with the given TLP label(s).
+    ///
+    /// Can be specified multiple times or as a comma-separated list.
+    /// Valid values: white, green, amber, red.
+    #[arg(long = "tlp", value_delimiter = ',')]
+    pub tlp_labels: Vec<TlpLabel>,
+}
+
+impl From<DistributionArguments> for DistributionConfig {
+    fn from(value: DistributionArguments) -> Self {
+        if value.tlp_labels.is_empty() {
+            Self::new()
+        } else {
+            let labels: HashSet<_> = value.tlp_labels.into_iter().collect();
+            Self::new().with_tlp_filter(labels)
+        }
+    }
 }
 
 #[derive(Debug, clap::Parser)]

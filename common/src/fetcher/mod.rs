@@ -1,6 +1,8 @@
 //! Fetching remote resources
 
+mod authentication;
 mod data;
+pub use authentication::FetchAuthentication;
 use backon::{ExponentialBuilder, Retryable};
 pub use data::*;
 
@@ -20,6 +22,7 @@ use url::Url;
 #[derive(Clone, Debug)]
 pub struct Fetcher {
     client: Client,
+    authentication: Option<(reqwest::header::HeaderName, reqwest::header::HeaderValue)>,
     retries: usize,
     /// *default_retry_after* is used when a 429 response does not include a Retry-After header
     default_retry_after: Duration,
@@ -45,9 +48,25 @@ pub struct FetcherOptions {
     default_retry_after: Duration,
     max_retry_after: Duration,
     user_agent: Cow<'static, str>,
+    authentication: Option<FetchAuthentication>,
 }
 
 impl FetcherOptions {
+    /// Set authentication for every URL requested by this fetcher, replacing any previous setting.
+    ///
+    /// Credentials are validated by [`Fetcher::new`]. Redirects retain reqwest's default behavior:
+    /// authorization headers may be stripped across hosts, while custom headers may be forwarded.
+    ///
+    /// ```
+    /// use walker_common::fetcher::{FetchAuthentication, FetcherOptions};
+    /// let options = FetcherOptions::new()
+    ///     .authentication(FetchAuthentication::Bearer("token".into()));
+    /// ```
+    pub fn authentication(mut self, authentication: FetchAuthentication) -> Self {
+        self.authentication = Some(authentication);
+        self
+    }
+
     /// Create a new instance.
     pub fn new() -> Self {
         Self::default()
@@ -100,6 +119,7 @@ impl Default for FetcherOptions {
             default_retry_after: Duration::from_secs(10),
             max_retry_after: Duration::from_mins(5),
             user_agent: Cow::Borrowed(crate::USER_AGENT),
+            authentication: None,
         }
     }
 }
@@ -113,17 +133,25 @@ impl From<Client> for Fetcher {
 impl Fetcher {
     /// Create a new downloader from options
     pub async fn new(options: FetcherOptions) -> anyhow::Result<Self> {
+        let authentication = options
+            .authentication
+            .as_ref()
+            .map(FetchAuthentication::header)
+            .transpose()?;
         let client = ClientBuilder::new()
             .timeout(options.timeout)
             .user_agent(options.user_agent.as_ref());
 
-        Ok(Self::with_client(client.build()?, options))
+        let mut fetcher = Self::with_client(client.build()?, options);
+        fetcher.authentication = authentication;
+        Ok(fetcher)
     }
 
     /// Create a fetcher providing an existing client.
     fn with_client(client: Client, options: FetcherOptions) -> Self {
         Self {
             client,
+            authentication: None,
             retries: options.retries,
             default_retry_after: options.default_retry_after,
         }
@@ -134,7 +162,11 @@ impl Fetcher {
         method: Method,
         url: Url,
     ) -> Result<reqwest::RequestBuilder, reqwest::Error> {
-        Ok(self.client.request(method, url))
+        let mut request = self.client.request(method, url);
+        if let Some((name, value)) = &self.authentication {
+            request = request.header(name.clone(), value.clone());
+        }
+        Ok(request)
     }
 
     /// fetch data, using a GET request.

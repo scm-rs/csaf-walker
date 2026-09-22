@@ -113,3 +113,12 @@ mod tests {
         Cli::command().debug_assert();
     }
 }
+
+#[cfg(test)]
+mod cli_tests {
+    #[test]
+    fn command_arguments_are_consistent() {
+        use clap::CommandFactory;
+        super::Cli::command().debug_assert();
+    }
+}

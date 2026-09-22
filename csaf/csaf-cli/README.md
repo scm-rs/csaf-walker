@@ -88,3 +88,22 @@ and you still want to allow them, it is possible to provide the "policy date", w
 still allowed (also see: <https://docs.rs/sequoia-policy-config/latest/sequoia_policy_config/>).
 
 Specifically, when encountering GPG v3 signatures, one can also use the `-3` switch.
+
+### Fetch authentication
+
+Commands with HTTP client options accept one of these authentication methods:
+
+```text
+--fetch-bearer-token 'TOKEN'
+--fetch-auth-header 'X-API-Key: TOKEN'
+--fetch-username 'USER' --fetch-password 'PASSWORD'
+```
+
+Clap rejects combinations of different methods. Basic authentication requires both
+flags; use `--fetch-password ''` for an empty password. Custom headers are split at
+the first colon, preserving colons in the value and trimming surrounding whitespace.
+
+Credentials apply to every URL requested by the fetcher, including metadata,
+documents, and related resources. Default reqwest redirect behavior is preserved:
+Authorization headers may be stripped across hosts; custom headers may be forwarded.
+These options configure fetching, independently of upload authentication.

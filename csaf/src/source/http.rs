@@ -17,7 +17,7 @@ use url::{ParseError, Url};
 use walker_common::utils::url::ensure_slash;
 use walker_common::{
     changes::{self, ChangeEntry, ChangeSource},
-    fetcher::{self, DataProcessor, Fetcher},
+    fetcher::{self, DataProcessor, Fetcher, Lenient},
     retrieve::{RetrievalMetadata, RetrievedDigest, RetrievingDigest},
     utils::openpgp::PublicKey,
     validate::source::{Key, KeySource, KeySourceError},
@@ -180,12 +180,11 @@ impl Source for HttpSource {
     ) -> Result<RetrievedAdvisory, Self::Error> {
         let digest_result = try_join!(
             async {
-                // If we have a signature source, use it. Otherwise, guess.
                 match discovered.signature.clone() {
-                    Some(signature) => self.fetcher.fetch::<Option<String>>(signature).await,
+                    Some(signature) => self.fetcher.fetch::<Lenient<String>>(signature).await,
                     None => {
                         self.fetcher
-                            .fetch::<Option<String>>(format!("{url}.asc", url = discovered.url))
+                            .fetch::<Lenient<String>>(format!("{url}.asc", url = discovered.url))
                             .await
                     }
                 }
@@ -193,12 +192,12 @@ impl Source for HttpSource {
             async {
                 match discovered.digest.clone() {
                     Some(digest) if digest.as_str().ends_with(".sha256") => {
-                        self.fetcher.fetch::<Option<String>>(digest).await
+                        self.fetcher.fetch::<Lenient<String>>(digest).await
                     }
-                    Some(_) => Ok(None),
+                    Some(_) => Ok(Lenient(None)),
                     None => {
                         self.fetcher
-                            .fetch::<Option<String>>(format!("{url}.sha256", url = discovered.url))
+                            .fetch::<Lenient<String>>(format!("{url}.sha256", url = discovered.url))
                             .await
                     }
                 }
@@ -206,12 +205,12 @@ impl Source for HttpSource {
             async {
                 match discovered.digest.clone() {
                     Some(digest) if digest.as_str().ends_with(".sha512") => {
-                        self.fetcher.fetch::<Option<String>>(digest).await
+                        self.fetcher.fetch::<Lenient<String>>(digest).await
                     }
-                    Some(_) => Ok(None),
+                    Some(_) => Ok(Lenient(None)),
                     None => {
                         self.fetcher
-                            .fetch::<Option<String>>(format!("{url}.sha512", url = discovered.url))
+                            .fetch::<Lenient<String>>(format!("{url}.sha512", url = discovered.url))
                             .await
                     }
                 }
@@ -219,6 +218,8 @@ impl Source for HttpSource {
         );
 
         let (signature, sha256, sha512) = digest_result.map_err(HttpSourceError::Fetcher)?;
+        let (signature, sha256, sha512): (Option<String>, Option<String>, Option<String>) =
+            (signature.into(), sha256.into(), sha512.into());
 
         let sha256 = sha256
             // take the first "word" from the line

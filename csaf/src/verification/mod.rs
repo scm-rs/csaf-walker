@@ -2,8 +2,8 @@
 //!
 //! Checks to ensure conformity with the specification.
 
-use crate::check::Capped;
 use crate::{
+    check::Capped,
     discover::{AsDiscovered, DiscoveredAdvisory},
     retrieve::{AsRetrieved, RetrievalContext, RetrievedAdvisory, RetrievedVisitor},
     source::Source,
@@ -26,6 +26,7 @@ use walker_common::{retrieve::RetrievalError, utils::url::Urlify};
 pub mod check;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum Csaf {
     V2_0(csaf::schema::csaf2_0::schema::CommonSecurityAdvisoryFramework),
     V2_1(csaf::schema::csaf2_1::schema::CommonSecurityAdvisoryFramework),
@@ -53,6 +54,7 @@ impl Csaf {
     }
 }
 
+#[non_exhaustive]
 pub enum DocumentLevelMetadata<'a> {
     V2_0(&'a csaf::schema::csaf2_0::schema::DocumentLevelMetaData),
     V2_1(&'a csaf::schema::csaf2_1::schema::DocumentLevelMetaData),
@@ -74,6 +76,7 @@ impl DocumentLevelMetadata<'_> {
     }
 }
 
+#[non_exhaustive]
 pub enum Tracking<'a> {
     V2_0(&'a csaf::schema::csaf2_0::schema::Tracking),
     V2_1(&'a csaf::schema::csaf2_1::schema::Tracking),

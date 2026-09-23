@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
+#[non_exhaustive]
 pub enum Sbom<'a> {
     V1_4(Cow<'a, serde_cyclonedx::cyclonedx::v_1_4::CycloneDx>),
     V1_5(Cow<'a, serde_cyclonedx::cyclonedx::v_1_5::CycloneDx>),
@@ -80,6 +81,7 @@ macro_rules! from {
 macro_rules! r#type {
     ($name:ident) => {
         #[derive(Copy, Clone, Debug, PartialEq)]
+        #[non_exhaustive]
         pub enum $name<'a> {
             V1_4(&'a serde_cyclonedx::cyclonedx::v_1_4::$name),
             V1_5(&'a serde_cyclonedx::cyclonedx::v_1_5::$name),

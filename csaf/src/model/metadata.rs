@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -24,11 +24,9 @@ pub struct Rolie {
 pub struct Feed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    #[serde(
-        deserialize_with = "deserialize_tlp_label",
-        serialize_with = "serialize_tlp_label"
-    )]
-    pub tlp_label: Option<TlpLabel>,
+    /// A missing label is treated as [`TlpLabel::Unlabeled`].
+    #[serde(default)]
+    pub tlp_label: TlpLabel,
     pub url: Url,
 }
 
@@ -36,6 +34,7 @@ pub struct Feed {
     Clone,
     Copy,
     Debug,
+    Default,
     PartialEq,
     Eq,
     PartialOrd,
@@ -50,48 +49,14 @@ pub struct Feed {
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "lowercase")]
 pub enum TlpLabel {
+    #[default]
+    Unlabeled,
     #[serde(alias = "WHITE")]
-    #[strum(serialize = "clear", serialize = "white")]
+    #[strum(to_string = "clear", serialize = "white")]
     Clear,
     Green,
     Amber,
     Red,
-}
-
-fn deserialize_tlp_label<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<TlpLabel>, D::Error> {
-    #[derive(Deserialize)]
-    #[serde(rename_all = "UPPERCASE")]
-    enum Raw {
-        Unlabeled,
-        #[serde(alias = "WHITE")]
-        Clear,
-        Green,
-        Amber,
-        Red,
-    }
-
-    Ok(match Raw::deserialize(deserializer)? {
-        Raw::Unlabeled => None,
-        Raw::Clear => Some(TlpLabel::Clear),
-        Raw::Green => Some(TlpLabel::Green),
-        Raw::Amber => Some(TlpLabel::Amber),
-        Raw::Red => Some(TlpLabel::Red),
-    })
-}
-
-fn serialize_tlp_label<S: Serializer>(
-    value: &Option<TlpLabel>,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    match value {
-        None => serializer.serialize_str("UNLABELED"),
-        Some(TlpLabel::Clear) => serializer.serialize_str("CLEAR"),
-        Some(TlpLabel::Green) => serializer.serialize_str("GREEN"),
-        Some(TlpLabel::Amber) => serializer.serialize_str("AMBER"),
-        Some(TlpLabel::Red) => serializer.serialize_str("RED"),
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -183,4 +148,48 @@ pub enum Role {
     Provider,
     #[serde(rename = "csaf_trusted_provider")]
     TrustedProvider,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rstest::rstest;
+    use serde_json::json;
+
+    #[rstest]
+    #[case::unlabeled(Some("UNLABELED"), TlpLabel::Unlabeled)]
+    #[case::clear(Some("CLEAR"), TlpLabel::Clear)]
+    #[case::white(Some("WHITE"), TlpLabel::Clear)]
+    #[case::red(Some("RED"), TlpLabel::Red)]
+    #[case::missing(None, TlpLabel::Unlabeled)]
+    fn tlp_label_deserialize(#[case] tlp_label: Option<&str>, #[case] expected: TlpLabel) {
+        let mut feed = json!({"url": "https://example.com/feed.json"});
+        if let Some(tlp_label) = tlp_label {
+            feed["tlp_label"] = tlp_label.into();
+        }
+        let feed: Feed = serde_json::from_value(feed).expect("must deserialize");
+        assert_eq!(feed.tlp_label, expected);
+    }
+
+    #[rstest]
+    #[case::unlabeled(TlpLabel::Unlabeled, "UNLABELED")]
+    #[case::clear(TlpLabel::Clear, "CLEAR")]
+    fn tlp_label_serialize(#[case] label: TlpLabel, #[case] expected: &str) {
+        assert_eq!(serde_json::to_value(label).unwrap(), json!(expected));
+    }
+
+    #[rstest]
+    #[case::unlabeled(TlpLabel::Unlabeled, "unlabeled")]
+    #[case::clear(TlpLabel::Clear, "clear")]
+    fn tlp_label_display(#[case] label: TlpLabel, #[case] expected: &str) {
+        assert_eq!(label.to_string(), expected);
+    }
+
+    #[rstest]
+    #[case::unlabeled("unlabeled", TlpLabel::Unlabeled)]
+    #[case::clear("clear", TlpLabel::Clear)]
+    #[case::white("white", TlpLabel::Clear)]
+    fn tlp_label_from_str(#[case] input: &str, #[case] expected: TlpLabel) {
+        assert_eq!(input.parse::<TlpLabel>().unwrap(), expected);
+    }
 }

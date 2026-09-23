@@ -174,7 +174,8 @@ impl<S: Source, P: Progress> Walker<S, P> {
     /// Filter distributions by TLP label.
     ///
     /// Distributions whose TLP label is not accepted by the filter will be skipped.
-    /// Directory distributions (which carry no TLP label) are always included.
+    /// Feeds without a TLP label are treated as [`TlpLabel::Unlabeled`]. Directory distributions
+    /// (which carry no TLP label) are always included.
     ///
     /// # Examples
     ///
@@ -218,8 +219,10 @@ impl<S: Source, P: Progress> Walker<S, P> {
                 }
             })
             .filter(
-                |distribution| match (self.tlp_filter.as_ref(), distribution.tlp_label()) {
-                    (Some(filter), Some(label)) => filter.include(label),
+                |distribution| match (self.tlp_filter.as_ref(), distribution) {
+                    (Some(filter), DistributionContext::Feed { tlp_label, .. }) => {
+                        filter.include(tlp_label)
+                    }
                     _ => true,
                 },
             )
@@ -371,4 +374,71 @@ fn collect_advisories<'s, V: DiscoveredVisitor + 's, S: Source>(
     collect_sources::<V, S>(source, discover_contexts, error_handler)
         .map_ok(|s| s.map(Ok))
         .try_flatten()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        model::metadata::{Feed, Rolie},
+        source::FileSource,
+    };
+    use url::Url;
+
+    fn distributions() -> Vec<Distribution> {
+        let feed = |label: TlpLabel| Feed {
+            summary: None,
+            tlp_label: label,
+            url: Url::parse(&format!("https://example.com/{label}.json")).unwrap(),
+        };
+
+        vec![Distribution {
+            directory_url: Some(Url::parse("https://example.com/directory/").unwrap()),
+            rolie: Some(Rolie {
+                categories: vec![],
+                feeds: vec![
+                    feed(TlpLabel::Unlabeled),
+                    feed(TlpLabel::Clear),
+                    feed(TlpLabel::Green),
+                ],
+                services: vec![],
+            }),
+        }]
+    }
+
+    fn collect(walker: Walker<FileSource, ()>) -> Vec<String> {
+        walker
+            .collect_distributions(distributions())
+            .iter()
+            .map(|distribution| distribution.url().path().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn tlp_filter_none() {
+        let walker = Walker::new(FileSource::new(".", None).unwrap());
+        assert_eq!(
+            collect(walker),
+            [
+                "/unlabeled.json",
+                "/clear.json",
+                "/green.json",
+                "/directory/"
+            ]
+        );
+    }
+
+    #[test]
+    fn tlp_filter_excludes_unlabeled() {
+        let walker = Walker::new(FileSource::new(".", None).unwrap())
+            .with_tlp_filter(HashSet::from([TlpLabel::Clear]));
+        assert_eq!(collect(walker), ["/clear.json", "/directory/"]);
+    }
+
+    #[test]
+    fn tlp_filter_includes_unlabeled() {
+        let walker = Walker::new(FileSource::new(".", None).unwrap())
+            .with_tlp_filter(HashSet::from([TlpLabel::Unlabeled]));
+        assert_eq!(collect(walker), ["/unlabeled.json", "/directory/"]);
+    }
 }

@@ -40,10 +40,7 @@ impl From<&str> for DiscoverConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DistributionContext {
     Directory(Url),
-    Feed {
-        url: Url,
-        tlp_label: Option<TlpLabel>,
-    },
+    Feed { url: Url, tlp_label: TlpLabel },
 }
 
 impl DistributionContext {
@@ -55,11 +52,11 @@ impl DistributionContext {
         }
     }
 
-    /// Get the TLP label, if available (only ROLIE feeds carry one).
-    pub fn tlp_label(&self) -> Option<&TlpLabel> {
+    /// Get the TLP label. Only ROLIE feeds carry one, directories are always [`TlpLabel::Unlabeled`].
+    pub fn tlp_label(&self) -> TlpLabel {
         match self {
-            Self::Directory(_) => None,
-            Self::Feed { tlp_label, .. } => tlp_label.as_ref(),
+            Self::Directory(_) => TlpLabel::Unlabeled,
+            Self::Feed { tlp_label, .. } => *tlp_label,
         }
     }
 }

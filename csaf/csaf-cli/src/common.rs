@@ -14,6 +14,7 @@ use walker_common::{
     validate::ValidationOptions,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub async fn walk_standard<V, P>(
     progress: P,
     client: ClientArguments,

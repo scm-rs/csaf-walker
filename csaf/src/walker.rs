@@ -100,14 +100,9 @@ impl_tlp_filter_for_range!(
 );
 
 /// Configuration for how distributions are collected and filtered.
+#[derive(Default)]
 pub struct DistributionConfig {
     pub tlp_filter: Option<Box<dyn TlpFilter>>,
-}
-
-impl Default for DistributionConfig {
-    fn default() -> Self {
-        Self { tlp_filter: None }
-    }
 }
 
 impl DistributionConfig {

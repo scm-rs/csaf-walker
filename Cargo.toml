@@ -47,7 +47,7 @@ humantime = "2"
 indicatif = "0.18.0"
 indicatif-log-bridge = "0.2.1"
 jsonpath-rust = "1"
-lzma-rust2 = "0.20.1"
+lzma-rust2 = "0.21.0"
 log = "0.4.17"
 openid = "0.24.0"
 openssl = { version = "0.10" }

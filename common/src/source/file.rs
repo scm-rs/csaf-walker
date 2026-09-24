@@ -1,4 +1,4 @@
-use crate::retrieve::RetrievedDigest;
+use crate::retrieve::{RetrievedDigest, parse_digest_file};
 use anyhow::anyhow;
 use bytes::Bytes;
 use digest::Digest;
@@ -42,8 +42,7 @@ pub async fn read_sig_and_digests(
     )?;
 
     let sha256 = sha256
-        // take the first "word" from the line
-        .and_then(|expected| expected.split(' ').next().map(ToString::to_string))
+        .and_then(|expected| parse_digest_file(&expected))
         .map(|expected| {
             let mut actual = Sha256::new();
             actual.update(data);
@@ -54,8 +53,7 @@ pub async fn read_sig_and_digests(
         });
 
     let sha512 = sha512
-        // take the first "word" from the line
-        .and_then(|expected| expected.split(' ').next().map(ToString::to_string))
+        .and_then(|expected| parse_digest_file(&expected))
         .map(|expected| {
             let mut actual = Sha512::new();
             actual.update(data);
@@ -66,4 +64,69 @@ pub async fn read_sig_and_digests(
         });
 
     Ok((signature, sha256, sha512))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::hex::Hex;
+    use rstest::rstest;
+
+    const DOC: &[u8] = b"test data";
+
+    /// Write the document and its digest files, using `format` to render the digest file content.
+    async fn read_with(
+        format: impl Fn(String) -> String,
+    ) -> (
+        Option<RetrievedDigest<Sha256>>,
+        Option<RetrievedDigest<Sha512>>,
+    ) {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join("doc.json");
+
+        tokio::fs::write(&path, DOC).await.expect("write doc");
+        tokio::fs::write(
+            format!("{}.sha256", path.display()),
+            format(Hex(&Sha256::digest(DOC)).to_lower()),
+        )
+        .await
+        .expect("write sha256");
+        tokio::fs::write(
+            format!("{}.sha512", path.display()),
+            format(Hex(&Sha512::digest(DOC)).to_lower()),
+        )
+        .await
+        .expect("write sha512");
+
+        let (_, sha256, sha512) = read_sig_and_digests(&path, &Bytes::from_static(DOC))
+            .await
+            .expect("read digests");
+
+        (sha256, sha512)
+    }
+
+    #[rstest]
+    #[case::bare(|h| h)]
+    #[case::lf(|h| format!("{h}\n"))]
+    #[case::crlf_uppercase(|h: String| format!("{}\r\n", h.to_uppercase()))]
+    #[case::space_name(|h| format!("{h}  doc.json\n"))]
+    #[case::tab_name(|h| format!("{h}\tdoc.json"))]
+    #[tokio::test]
+    async fn digest_file_formats(#[case] format: fn(String) -> String) {
+        let (sha256, sha512) = read_with(format).await;
+
+        assert!(sha256.expect("sha256 digest").validate().is_ok());
+        assert!(sha512.expect("sha512 digest").validate().is_ok());
+    }
+
+    #[rstest]
+    #[case::empty(|_| String::new())]
+    #[case::only_whitespace(|_| " \r\n".to_string())]
+    #[tokio::test]
+    async fn empty_digest_files(#[case] format: fn(String) -> String) {
+        let (sha256, sha512) = read_with(format).await;
+
+        assert!(sha256.is_none());
+        assert!(sha512.is_none());
+    }
 }

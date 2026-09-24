@@ -44,6 +44,14 @@ impl<D: Digest> Debug for RetrievedDigest<D> {
     }
 }
 
+/// Extract the expected digest from the content of a digest file.
+///
+/// Takes the first whitespace-separated token, so that `HASH`, `HASH\n`,
+/// `HASH\r\n`, `HASH  name` and `HASH\tname` are all handled.
+pub fn parse_digest_file(content: &str) -> Option<String> {
+    content.split_whitespace().next().map(ToString::to_string)
+}
+
 /// Building a digest while retrieving.
 #[derive(Clone)]
 pub struct RetrievingDigest<D: Digest> {
@@ -109,6 +117,19 @@ mod tests {
             actual: Sha256::digest(b"test data"),
         };
         assert!(digest.validate().is_err());
+    }
+
+    #[rstest]
+    #[case::bare("abc123", Some("abc123"))]
+    #[case::lf("abc123\n", Some("abc123"))]
+    #[case::crlf("ABC123\r\n", Some("ABC123"))]
+    #[case::space_name("abc123  name.json\n", Some("abc123"))]
+    #[case::tab_name("abc123\tname.json", Some("abc123"))]
+    #[case::leading_whitespace(" \tabc123\n", Some("abc123"))]
+    #[case::empty("", None)]
+    #[case::only_whitespace("\r\n", None)]
+    fn parse_digest_file_content(#[case] content: &str, #[case] expected: Option<&str>) {
+        assert_eq!(parse_digest_file(content).as_deref(), expected);
     }
 }
 

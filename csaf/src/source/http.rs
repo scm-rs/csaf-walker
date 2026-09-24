@@ -18,7 +18,7 @@ use walker_common::utils::url::ensure_slash;
 use walker_common::{
     changes::{self, ChangeEntry, ChangeSource},
     fetcher::{self, DataProcessor, Fetcher, Lenient},
-    retrieve::{RetrievalMetadata, RetrievedDigest, RetrievingDigest},
+    retrieve::{RetrievalMetadata, RetrievedDigest, RetrievingDigest, parse_digest_file},
     utils::openpgp::PublicKey,
     validate::source::{Key, KeySource, KeySourceError},
 };
@@ -221,15 +221,13 @@ impl Source for HttpSource {
             digest_result.map_err(HttpSourceError::Fetcher)?;
 
         let sha256 = sha256
-            // take the first "word" from the line
-            .and_then(|expected| expected.split(' ').next().map(ToString::to_string))
+            .and_then(|expected| parse_digest_file(&expected))
             .map(|expected| RetrievingDigest {
                 expected,
                 current: Sha256::new(),
             });
         let sha512 = sha512
-            // take the first "word" from the line
-            .and_then(|expected| expected.split(' ').next().map(ToString::to_string))
+            .and_then(|expected| parse_digest_file(&expected))
             .map(|expected| RetrievingDigest {
                 expected,
                 current: Sha512::new(),

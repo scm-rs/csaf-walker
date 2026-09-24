@@ -50,13 +50,13 @@ impl<SE: Display + Debug> KeySourceError<SE> {
 }
 
 /// A source of CSAF public keys
-pub trait KeySource: Clone {
-    type Error: Display + Debug;
+pub trait KeySource: Clone + Send + Sync {
+    type Error: Display + Debug + Send;
 
     fn load_public_key(
         &self,
         key: Key<'_>,
-    ) -> impl Future<Output = Result<PublicKey, KeySourceError<Self::Error>>>;
+    ) -> impl Future<Output = Result<PublicKey, KeySourceError<Self::Error>>> + Send;
 }
 
 impl KeySource for Fetcher {

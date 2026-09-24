@@ -49,7 +49,7 @@ impl Urlify for RetrievedAdvisory {
 }
 
 /// Get a document as [`RetrievedAdvisory`]
-pub trait AsRetrieved: Debug {
+pub trait AsRetrieved: Debug + Send {
     fn as_retrieved(&self) -> &RetrievedAdvisory;
 }
 
@@ -96,27 +96,27 @@ impl<'c> Deref for RetrievalContext<'c> {
     }
 }
 
-pub trait RetrievedVisitor<S: Source> {
-    type Error: std::fmt::Display + Debug;
-    type Context;
+pub trait RetrievedVisitor<S: Source>: Send + Sync {
+    type Error: std::fmt::Display + Debug + Send;
+    type Context: Send + Sync;
 
     fn visit_context(
         &self,
         context: &RetrievalContext,
-    ) -> impl Future<Output = Result<Self::Context, Self::Error>>;
+    ) -> impl Future<Output = Result<Self::Context, Self::Error>> + Send;
 
     fn visit_advisory(
         &self,
         context: &Self::Context,
         result: Result<RetrievedAdvisory, RetrievalError<DiscoveredAdvisory, S>>,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 impl<F, E, Fut, S> RetrievedVisitor<S> for F
 where
-    F: Fn(Result<RetrievedAdvisory, RetrievalError<DiscoveredAdvisory, S>>) -> Fut,
-    Fut: Future<Output = Result<(), E>>,
-    E: std::fmt::Display + Debug,
+    F: Fn(Result<RetrievedAdvisory, RetrievalError<DiscoveredAdvisory, S>>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), E>> + Send,
+    E: std::fmt::Display + Debug + Send,
     S: Source,
 {
     type Error = E;

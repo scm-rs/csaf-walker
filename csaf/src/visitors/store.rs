@@ -13,7 +13,7 @@ use std::{
     fmt::Debug,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
-    rc::Rc,
+    sync::Arc,
 };
 use tokio::fs;
 use walker_common::{
@@ -102,7 +102,7 @@ where
     S::Error: 'static,
 {
     type Error = StoreRetrievedError<S>;
-    type Context = Rc<ProviderMetadata>;
+    type Context = Arc<ProviderMetadata>;
 
     async fn visit_context(
         &self,
@@ -112,7 +112,7 @@ where
         self.prepare_distributions(context.metadata).await?;
         self.store_keys(context.keys).await?;
 
-        Ok(Rc::new(context.metadata.clone()))
+        Ok(Arc::new(context.metadata.clone()))
     }
 
     /// Stores a retrieved advisory or its retrieval error.

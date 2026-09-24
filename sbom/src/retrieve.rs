@@ -79,27 +79,27 @@ impl<'c> Deref for RetrievalContext<'c> {
     }
 }
 
-pub trait RetrievedVisitor<S: Source> {
-    type Error: std::fmt::Display + Debug;
-    type Context;
+pub trait RetrievedVisitor<S: Source>: Send + Sync {
+    type Error: std::fmt::Display + Debug + Send;
+    type Context: Send + Sync;
 
     fn visit_context(
         &self,
         context: &RetrievalContext,
-    ) -> impl Future<Output = Result<Self::Context, Self::Error>>;
+    ) -> impl Future<Output = Result<Self::Context, Self::Error>> + Send;
 
     fn visit_sbom(
         &self,
         context: &Self::Context,
         result: Result<RetrievedSbom, RetrievalError<DiscoveredSbom, S>>,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 impl<F, E, Fut, S> RetrievedVisitor<S> for F
 where
-    F: Fn(Result<RetrievedSbom, RetrievalError<DiscoveredSbom, S>>) -> Fut,
-    Fut: Future<Output = Result<(), E>>,
-    E: std::fmt::Display + Debug,
+    F: Fn(Result<RetrievedSbom, RetrievalError<DiscoveredSbom, S>>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), E>> + Send,
+    E: std::fmt::Display + Debug + Send,
     S: Source,
 {
     type Error = E;

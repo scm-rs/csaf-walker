@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display};
 
 pub mod file;
 
-pub trait Source {
-    type Error: Display + Debug;
+pub trait Source: Send + Sync {
+    type Error: Display + Debug + Send;
     type Retrieved: RetrievedDocument;
 }

@@ -6,7 +6,9 @@ use std::ops::{Deref, DerefMut};
 
 /// Data which can be extracted from a [`Response`].
 pub trait Data: Sized {
-    fn from_response(response: Response) -> impl Future<Output = Result<Self, reqwest::Error>>;
+    fn from_response(
+        response: Response,
+    ) -> impl Future<Output = Result<Self, reqwest::Error>> + Send;
 }
 
 /// String data

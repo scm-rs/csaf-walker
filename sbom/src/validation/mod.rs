@@ -60,27 +60,27 @@ impl<'c> Deref for ValidationContext<'c> {
     }
 }
 
-pub trait ValidatedVisitor<S: Source> {
-    type Error: Display + Debug;
-    type Context;
+pub trait ValidatedVisitor<S: Source>: Send + Sync {
+    type Error: Display + Debug + Send;
+    type Context: Send + Sync;
 
     fn visit_context(
         &self,
         context: &ValidationContext,
-    ) -> impl Future<Output = Result<Self::Context, Self::Error>>;
+    ) -> impl Future<Output = Result<Self::Context, Self::Error>> + Send;
 
     fn visit_sbom(
         &self,
         context: &Self::Context,
         result: Result<ValidatedSbom, ValidationError<S>>,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 impl<F, E, Fut, S> ValidatedVisitor<S> for F
 where
-    F: Fn(Result<ValidatedSbom, ValidationError<S>>) -> Fut,
-    Fut: Future<Output = Result<(), E>>,
-    E: Display + Debug,
+    F: Fn(Result<ValidatedSbom, ValidationError<S>>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), E>> + Send,
+    E: Display + Debug + Send,
     S: Source,
 {
     type Error = E;

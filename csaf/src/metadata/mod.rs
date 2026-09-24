@@ -18,12 +18,12 @@ pub enum Error {
     Dns(#[from] hickory_resolver::net::NetError),
 }
 
-#[async_trait(?Send)]
-pub trait MetadataSource: Debug {
+#[async_trait]
+pub trait MetadataSource: Debug + Send + Sync {
     async fn load_metadata(&self, fetcher: &Fetcher) -> Result<ProviderMetadata, Error>;
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl MetadataSource for Url {
     async fn load_metadata(&self, fetcher: &Fetcher) -> Result<ProviderMetadata, Error> {
         Ok(fetcher
@@ -33,14 +33,14 @@ impl MetadataSource for Url {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl MetadataSource for &str {
     async fn load_metadata(&self, fetcher: &Fetcher) -> Result<ProviderMetadata, Error> {
         MetadataRetriever::new(*self).load_metadata(fetcher).await
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl MetadataSource for String {
     async fn load_metadata(&self, fetcher: &Fetcher) -> Result<ProviderMetadata, Error> {
         MetadataRetriever::new(self).load_metadata(fetcher).await
@@ -202,7 +202,7 @@ impl MetadataRetriever {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl MetadataSource for MetadataRetriever {
     async fn load_metadata(&self, fetcher: &Fetcher) -> Result<ProviderMetadata, Error> {
         // try a full URL first

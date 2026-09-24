@@ -11,7 +11,7 @@ use csaf_walker::{
 use digest::Output;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use sha2::Sha256;
-use std::{fs, rc::Rc, sync::Arc, time::Duration};
+use std::{fs, sync::Arc, time::Duration};
 use tempfile::TempDir;
 use time::OffsetDateTime;
 use url::Url;
@@ -114,7 +114,7 @@ async fn given_advisory_could_be_retrieved_when_it_should_be_stored_it_is_saved_
 
     // Create test metadata and context
     let metadata = create_test_metadata();
-    let context = Rc::new(metadata);
+    let context = Arc::new(metadata);
 
     // Create test advisory
     let discovered = create_test_discovered_advisory();
@@ -165,7 +165,7 @@ async fn given_advisory_retrieval_fails_with_non_client_error_when_visiting_then
 
     // Create test metadata and context
     let metadata = create_test_metadata();
-    let context = Rc::new(metadata);
+    let context = Arc::new(metadata);
 
     // Create test advisory with a non-client error (e.g., IO error, network timeout, etc.)
     let discovered = create_test_discovered_advisory();
@@ -213,7 +213,7 @@ async fn given_advisory_retrieval_fails_with_client_error_and_allow_missing_is_s
 
     // Create test metadata and context
     let metadata = create_test_metadata();
-    let context = Rc::new(metadata);
+    let context = Arc::new(metadata);
 
     // Create test advisory with a non-client error (e.g., IO error, network timeout, etc.)
     let discovered = create_test_discovered_advisory();
@@ -269,7 +269,7 @@ async fn given_advisory_retrieval_fails_with_client_error_when_visiting_then_no_
 
     // Create test metadata and context
     let metadata = create_test_metadata();
-    let context = Rc::new(metadata);
+    let context = Arc::new(metadata);
 
     // Create test advisory with a non-client error (e.g., IO error, network timeout, etc.)
     let discovered = create_test_discovered_advisory();
@@ -317,7 +317,7 @@ async fn given_advisory_retrieval_fails_with_non_client_error_in_http_source_whe
 
     // Create test metadata and context
     let metadata = create_test_metadata();
-    let context = Rc::new(metadata);
+    let context = Arc::new(metadata);
 
     // Create test advisory with a non-client error (e.g., IO error, network timeout, etc.)
     let discovered = create_test_discovered_advisory();

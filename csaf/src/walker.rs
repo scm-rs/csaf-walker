@@ -25,13 +25,13 @@ where
     Visitor(VE),
 }
 
-pub type DistributionFilter = Box<dyn Fn(&DistributionContext) -> bool>;
+pub type DistributionFilter = Box<dyn Fn(&DistributionContext) -> bool + Send + Sync>;
 
 /// Handles errors that occur when fetching a distribution's index.
 ///
 /// Return `Ok(())` to skip the distribution and continue walking.
 /// Return `Err(e)` to abort the walk with the error.
-pub trait DistributionErrorHandler<E> {
+pub trait DistributionErrorHandler<E>: Send + Sync {
     fn handle(&self, ctx: &DistributionContext, error: E) -> Result<(), E>;
 }
 
@@ -43,7 +43,7 @@ impl<E> DistributionErrorHandler<E> for () {
 
 impl<F, E> DistributionErrorHandler<E> for F
 where
-    F: Fn(&DistributionContext, E) -> Result<(), E>,
+    F: Fn(&DistributionContext, E) -> Result<(), E> + Send + Sync,
 {
     fn handle(&self, ctx: &DistributionContext, error: E) -> Result<(), E> {
         (self)(ctx, error)
@@ -53,7 +53,7 @@ where
 /// Filters distributions by their TLP label.
 ///
 /// Returns `true` to include the distribution, `false` to skip it.
-pub trait TlpFilter {
+pub trait TlpFilter: Send + Sync {
     fn include(&self, label: &TlpLabel) -> bool;
 }
 
@@ -65,7 +65,7 @@ impl TlpFilter for HashSet<TlpLabel> {
 
 impl<F> TlpFilter for F
 where
-    F: Fn(&TlpLabel) -> bool,
+    F: Fn(&TlpLabel) -> bool + Send + Sync,
 {
     fn include(&self, label: &TlpLabel) -> bool {
         (self)(label)
@@ -153,7 +153,7 @@ impl<S: Source, P: Progress> Walker<S, P> {
     /// will not even be fetched.
     pub fn with_distribution_filter<F>(mut self, distribution_filter: F) -> Self
     where
-        F: Fn(&DistributionContext) -> bool + 'static,
+        F: Fn(&DistributionContext) -> bool + Send + Sync + 'static,
     {
         self.distribution_filter = Some(Box::new(distribution_filter));
         self
@@ -440,5 +440,28 @@ mod test {
         let walker = Walker::new(FileSource::new(".", None).unwrap())
             .with_tlp_filter(HashSet::from([TlpLabel::Unlabeled]));
         assert_eq!(collect(walker), ["/unlabeled.json", "/directory/"]);
+    }
+}
+
+#[cfg(test)]
+mod send_test {
+    use super::*;
+
+    fn assert_send<T: Send>(_: T) {}
+
+    #[allow(dead_code)]
+    fn walk_is_send<S: Source, P: Progress, V: DiscoveredVisitor>(
+        walker: Walker<S, P>,
+        visitor: V,
+    ) {
+        assert_send(walker.walk(visitor));
+    }
+
+    #[allow(dead_code)]
+    fn walk_parallel_is_send<S: Source, P: Progress, V: DiscoveredVisitor>(
+        walker: Walker<S, P>,
+        visitor: V,
+    ) {
+        assert_send(walker.walk_parallel(4, visitor));
     }
 }

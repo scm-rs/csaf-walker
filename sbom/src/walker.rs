@@ -121,3 +121,26 @@ impl<S: Source, P: Progress> Walker<S, P> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod send_test {
+    use super::*;
+
+    fn assert_send<T: Send>(_: T) {}
+
+    #[allow(dead_code)]
+    fn walk_is_send<S: Source, P: Progress, V: DiscoveredVisitor>(
+        walker: Walker<S, P>,
+        visitor: V,
+    ) {
+        assert_send(walker.walk(visitor));
+    }
+
+    #[allow(dead_code)]
+    fn walk_parallel_is_send<S: Source, P: Progress, V: DiscoveredVisitor>(
+        walker: Walker<S, P>,
+        visitor: V,
+    ) {
+        assert_send(walker.walk_parallel(4, visitor));
+    }
+}

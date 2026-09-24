@@ -4,7 +4,7 @@ use std::future::Future;
 
 pub mod indicatif;
 
-pub trait Progress {
+pub trait Progress: Send + Sync {
     type Instance: ProgressBar;
 
     fn start(&self, work: usize) -> Self::Instance;
@@ -12,16 +12,16 @@ pub trait Progress {
     fn println(&self, #[allow(unused_variables)] message: &str) {}
 }
 
-pub trait ProgressBar {
-    fn tick(&mut self) -> impl Future<Output = ()> {
+pub trait ProgressBar: Send {
+    fn tick(&mut self) -> impl Future<Output = ()> + Send {
         self.increment(1)
     }
 
-    fn increment(&mut self, work: usize) -> impl Future<Output = ()>;
+    fn increment(&mut self, work: usize) -> impl Future<Output = ()> + Send;
 
-    fn finish(self) -> impl Future<Output = ()>;
+    fn finish(self) -> impl Future<Output = ()> + Send;
 
-    fn set_message(&mut self, msg: String) -> impl Future<Output = ()>;
+    fn set_message(&mut self, msg: String) -> impl Future<Output = ()> + Send;
 }
 
 impl Progress for () {

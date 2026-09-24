@@ -105,27 +105,27 @@ pub struct DiscoveredContext<'c> {
 }
 
 /// Visiting discovered advisories
-pub trait DiscoveredVisitor {
-    type Error: std::fmt::Display + Debug;
-    type Context;
+pub trait DiscoveredVisitor: Send + Sync {
+    type Error: std::fmt::Display + Debug + Send;
+    type Context: Send + Sync;
 
     fn visit_context(
         &self,
         context: &DiscoveredContext,
-    ) -> impl Future<Output = Result<Self::Context, Self::Error>>;
+    ) -> impl Future<Output = Result<Self::Context, Self::Error>> + Send;
 
     fn visit_advisory(
         &self,
         context: &Self::Context,
         advisory: DiscoveredAdvisory,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 impl<F, E, Fut> DiscoveredVisitor for F
 where
-    F: Fn(DiscoveredAdvisory) -> Fut,
-    Fut: Future<Output = Result<(), E>>,
-    E: std::fmt::Display + Debug,
+    F: Fn(DiscoveredAdvisory) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), E>> + Send,
+    E: std::fmt::Display + Debug + Send,
 {
     type Error = E;
     type Context = ();

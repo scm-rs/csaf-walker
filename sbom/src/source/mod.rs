@@ -21,12 +21,12 @@ use walker_common::fetcher::{Fetcher, FetcherOptions};
 
 /// A source of SBOM documents
 pub trait Source: walker_common::source::Source + Clone + Debug {
-    fn load_metadata(&self) -> impl Future<Output = Result<SourceMetadata, Self::Error>>;
-    fn load_index(&self) -> impl Future<Output = Result<Vec<DiscoveredSbom>, Self::Error>>;
+    fn load_metadata(&self) -> impl Future<Output = Result<SourceMetadata, Self::Error>> + Send;
+    fn load_index(&self) -> impl Future<Output = Result<Vec<DiscoveredSbom>, Self::Error>> + Send;
     fn load_sbom(
         &self,
         sbom: DiscoveredSbom,
-    ) -> impl Future<Output = Result<RetrievedSbom, Self::Error>>;
+    ) -> impl Future<Output = Result<RetrievedSbom, Self::Error>> + Send;
 }
 
 pub async fn new_source(

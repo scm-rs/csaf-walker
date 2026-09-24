@@ -102,7 +102,7 @@ impl Tracking<'_> {
 pub struct VerifiedAdvisory<A, I>
 where
     A: AsRetrieved,
-    I: Clone + PartialEq + Eq + Hash,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     /// The advisory that was verified.
     pub advisory: A,
@@ -121,7 +121,7 @@ where
 impl<A, I> Deref for VerifiedAdvisory<A, I>
 where
     A: AsRetrieved,
-    I: Clone + PartialEq + Eq + Hash,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     type Target = A;
 
@@ -133,7 +133,7 @@ where
 impl<A, I> DerefMut for VerifiedAdvisory<A, I>
 where
     A: AsRetrieved,
-    I: Clone + PartialEq + Eq + Hash,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.advisory
@@ -188,25 +188,25 @@ where
 pub struct VerificationContext {}
 
 /// A visitor accepting a verified advisory
-pub trait VerifiedVisitor<A, E, I>
+pub trait VerifiedVisitor<A, E, I>: Send + Sync
 where
     A: AsRetrieved,
-    E: Display + Debug,
-    I: Clone + PartialEq + Eq + Hash,
+    E: Display + Debug + Send,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
-    type Error: Display + Debug;
-    type Context;
+    type Error: Display + Debug + Send;
+    type Context: Send + Sync;
 
     fn visit_context(
         &self,
         context: &VerificationContext,
-    ) -> impl Future<Output = Result<Self::Context, Self::Error>>;
+    ) -> impl Future<Output = Result<Self::Context, Self::Error>> + Send;
 
     fn visit_advisory(
         &self,
         context: &Self::Context,
         result: Result<VerifiedAdvisory<A, I>, VerificationError<E, A>>,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -223,20 +223,20 @@ pub struct VerifyingVisitor<A, E, V, I>
 where
     A: AsRetrieved,
     V: VerifiedVisitor<A, E, I>,
-    E: Display + Debug,
-    I: Clone + PartialEq + Eq + Hash,
+    E: Display + Debug + Send,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     visitor: V,
     checks: Vec<(I, Box<dyn Check>)>,
-    _marker: PhantomData<(A, E)>,
+    _marker: PhantomData<fn() -> (A, E)>,
 }
 
 impl<A, E, V, I> VerifyingVisitor<A, E, V, I>
 where
     A: AsRetrieved,
     V: VerifiedVisitor<A, E, I>,
-    E: Display + Debug,
-    I: Clone + PartialEq + Eq + Hash,
+    E: Display + Debug + Send,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     pub fn new(visitor: V) -> Self {
         Self {
@@ -312,7 +312,7 @@ impl<V, I, S> RetrievedVisitor<S>
     for VerifyingVisitor<RetrievedAdvisory, RetrievalError<DiscoveredAdvisory, S>, V, I>
 where
     V: VerifiedVisitor<RetrievedAdvisory, RetrievalError<DiscoveredAdvisory, S>, I>,
-    I: Clone + PartialEq + Eq + Hash,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
     S: Source,
 {
     type Error = Error<V::Error>;
@@ -350,7 +350,7 @@ where
 impl<V, I, S> ValidatedVisitor<S> for VerifyingVisitor<ValidatedAdvisory, ValidationError<S>, V, I>
 where
     V: VerifiedVisitor<ValidatedAdvisory, ValidationError<S>, I>,
-    I: Clone + PartialEq + Eq + Hash,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync,
     S: Source,
 {
     type Error = Error<V::Error>;
@@ -387,12 +387,12 @@ where
 
 impl<F, E, Fut, A, I, UE> VerifiedVisitor<A, UE, I> for F
 where
-    UE: Debug + Display + 'static,
-    F: Fn(Result<VerifiedAdvisory<A, I>, VerificationError<UE, A>>) -> Fut,
-    Fut: Future<Output = Result<(), E>>,
-    E: Display + Debug + 'static,
+    UE: Debug + Display + Send + 'static,
+    F: Fn(Result<VerifiedAdvisory<A, I>, VerificationError<UE, A>>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), E>> + Send,
+    E: Display + Debug + 'static + Send,
     A: AsRetrieved + 'static,
-    I: Clone + PartialEq + Eq + Hash + 'static,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
 {
     type Error = E;
     type Context = ();

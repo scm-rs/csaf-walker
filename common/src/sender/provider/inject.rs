@@ -8,7 +8,7 @@ pub trait TokenInjector: Sized + Send + Sync {
     fn inject_token(
         self,
         token_provider: &dyn TokenProvider,
-    ) -> impl Future<Output = Result<Self, Error>>;
+    ) -> impl Future<Output = Result<Self, Error>> + Send;
 }
 
 /// Injects tokens into a request by setting the authorization header to a "bearer" token.

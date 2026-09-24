@@ -247,17 +247,17 @@ pub trait DataProcessor {
     fn process(
         &self,
         response: reqwest::Response,
-    ) -> impl Future<Output = Result<Self::Type, reqwest::Error>>;
+    ) -> impl Future<Output = Result<Self::Type, reqwest::Error>> + Send;
 }
 
 struct TypedProcessor<D: Data> {
-    _marker: PhantomData<D>,
+    _marker: PhantomData<fn() -> D>,
 }
 
 impl<D: Data> TypedProcessor<D> {
     pub const fn new() -> Self {
         Self {
-            _marker: PhantomData::<D>,
+            _marker: PhantomData,
         }
     }
 }

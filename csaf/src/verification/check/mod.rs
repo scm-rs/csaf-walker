@@ -95,17 +95,17 @@ impl CheckResult {
     }
 }
 
-#[async_trait(?Send)]
-pub trait Check {
+#[async_trait]
+pub trait Check: Send + Sync {
     /// Perform a check on a CSAF document
     async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult>;
 }
 
 /// Implementation to allow a simple function style check
-#[async_trait(?Send)]
+#[async_trait]
 impl<F> Check for F
 where
-    F: Fn(&Csaf) -> Vec<CheckError>,
+    F: Fn(&Csaf) -> Vec<CheckError> + Send + Sync,
 {
     async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
         let errors = (self)(csaf);
@@ -220,7 +220,7 @@ impl CsafValidation {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl Check for CsafValidation {
     async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
         match csaf {

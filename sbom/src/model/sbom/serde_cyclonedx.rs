@@ -9,6 +9,7 @@ pub enum Sbom<'a> {
     V1_4(Cow<'a, serde_cyclonedx::cyclonedx::v_1_4::CycloneDx>),
     V1_5(Cow<'a, serde_cyclonedx::cyclonedx::v_1_5::CycloneDx>),
     V1_6(Cow<'a, serde_cyclonedx::cyclonedx::v_1_6::CycloneDx>),
+    V1_7(Cow<'a, serde_cyclonedx::cyclonedx::v_1_7::CycloneDx>),
 }
 
 impl Serialize for Sbom<'_> {
@@ -20,6 +21,7 @@ impl Serialize for Sbom<'_> {
             Self::V1_4(sbom) => sbom.serialize(serializer),
             Self::V1_5(sbom) => sbom.serialize(serializer),
             Self::V1_6(sbom) => sbom.serialize(serializer),
+            Self::V1_7(sbom) => sbom.serialize(serializer),
         }
     }
 }
@@ -29,9 +31,28 @@ impl<'de> Deserialize<'de> for Sbom<'static> {
     where
         D: Deserializer<'de>,
     {
-        // TODO: peek into the version, and select the correct version
-        serde_cyclonedx::cyclonedx::v_1_6::CycloneDx::deserialize(deserializer)
-            .map(|s| Self::V1_6(Cow::Owned(s)))
+        use serde::de::Error;
+
+        // peek into the version, and select the correct version
+        let json = serde_json::Value::deserialize(deserializer)?;
+
+        let version = json["specVersion"]
+            .as_str()
+            .ok_or_else(|| D::Error::missing_field("specVersion"))?
+            .to_string();
+
+        match version.as_str() {
+            "1.4" => serde_json::from_value(json).map(|s| Self::V1_4(Cow::Owned(s))),
+            "1.5" => serde_json::from_value(json).map(|s| Self::V1_5(Cow::Owned(s))),
+            "1.6" => serde_json::from_value(json).map(|s| Self::V1_6(Cow::Owned(s))),
+            "1.7" => serde_json::from_value(json).map(|s| Self::V1_7(Cow::Owned(s))),
+            version => {
+                return Err(D::Error::custom(format!(
+                    "Unsupported CycloneDX version: {version}"
+                )));
+            }
+        }
+        .map_err(D::Error::custom)
     }
 }
 
@@ -52,6 +73,7 @@ macro_rules! attribute {
             Self::V1_4($v) => $access,
             Self::V1_5($v) => $access,
             Self::V1_6($v) => $access,
+            Self::V1_7($v) => $access,
         }
     };
 }
@@ -75,6 +97,12 @@ macro_rules! from {
                 Self::V1_6(value)
             }
         }
+
+        impl <$($lt,)? > From<$(& $lt)? serde_cyclonedx::cyclonedx::v_1_7::$src> for $name {
+            fn from(value: $(& $lt)? serde_cyclonedx::cyclonedx::v_1_7::$src) -> Self {
+                Self::V1_7(value)
+            }
+        }
     };
 }
 
@@ -86,6 +114,7 @@ macro_rules! r#type {
             V1_4(&'a serde_cyclonedx::cyclonedx::v_1_4::$name),
             V1_5(&'a serde_cyclonedx::cyclonedx::v_1_5::$name),
             V1_6(&'a serde_cyclonedx::cyclonedx::v_1_6::$name),
+            V1_7(&'a serde_cyclonedx::cyclonedx::v_1_7::$name),
         }
     };
 }
@@ -174,6 +203,12 @@ impl From<serde_cyclonedx::cyclonedx::v_1_6::CycloneDx> for Sbom<'static> {
     }
 }
 
+impl From<serde_cyclonedx::cyclonedx::v_1_7::CycloneDx> for Sbom<'static> {
+    fn from(value: serde_cyclonedx::cyclonedx::v_1_7::CycloneDx) -> Self {
+        Self::V1_7(Cow::Owned(value))
+    }
+}
+
 impl<'a> From<&'a serde_cyclonedx::cyclonedx::v_1_4::CycloneDx> for Sbom<'a> {
     fn from(value: &'a serde_cyclonedx::cyclonedx::v_1_4::CycloneDx) -> Self {
         Self::V1_4(Cow::Borrowed(value))
@@ -189,6 +224,12 @@ impl<'a> From<&'a serde_cyclonedx::cyclonedx::v_1_5::CycloneDx> for Sbom<'a> {
 impl<'a> From<&'a serde_cyclonedx::cyclonedx::v_1_6::CycloneDx> for Sbom<'a> {
     fn from(value: &'a serde_cyclonedx::cyclonedx::v_1_6::CycloneDx) -> Self {
         Self::V1_6(Cow::Borrowed(value))
+    }
+}
+
+impl<'a> From<&'a serde_cyclonedx::cyclonedx::v_1_7::CycloneDx> for Sbom<'a> {
+    fn from(value: &'a serde_cyclonedx::cyclonedx::v_1_7::CycloneDx) -> Self {
+        Self::V1_7(Cow::Borrowed(value))
     }
 }
 
@@ -242,6 +283,7 @@ impl Dependency<'_> {
             Self::V1_4(dep) => &dep.ref_,
             Self::V1_5(dep) => dep.ref_.as_str().unwrap_or_default(),
             Self::V1_6(dep) => &dep.ref_,
+            Self::V1_7(dep) => &dep.ref_,
         }
     }
 
@@ -256,6 +298,10 @@ impl Dependency<'_> {
                 .as_ref()
                 .map(|deps| deps.iter().flat_map(|s| s.as_str()).collect()),
             Self::V1_6(dep) => dep
+                .depends_on
+                .as_ref()
+                .map(|deps| deps.iter().map(|s| s.as_str()).collect()),
+            Self::V1_7(dep) => dep
                 .depends_on
                 .as_ref()
                 .map(|deps| deps.iter().map(|s| s.as_str()).collect()),

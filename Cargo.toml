@@ -87,3 +87,6 @@ tag-name = "v{{version}}"
 
 [patch.crates-io]
 #cyclonedx-bom = { path = "../cyclonedx-rust-cargo/cyclonedx-bom" }
+
+# required for the CycloneDX 1.7 bindings, which are not part of a release yet
+serde-cyclonedx = { git = "https://github.com/think-ahead-technologies/sbom-rs.git", rev = "04994cb" }

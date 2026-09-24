@@ -1,0 +1,58 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-21T10:00:00Z",
+    "component": {
+      "bom-ref": "pkg:cargo/sbom-walker@0.18.1",
+      "type": "application",
+      "name": "sbom-walker",
+      "version": "0.18.1"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:cargo/serde@1.0.0",
+      "type": "library",
+      "name": "serde",
+      "version": "1.0.0"
+    },
+    {
+      "bom-ref": "pkg:cargo/serde_json@1.0.0",
+      "type": "library",
+      "name": "serde_json",
+      "version": "1.0.0"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:cargo/sbom-walker@0.18.1",
+      "dependsOn": [
+        "pkg:cargo/serde@1.0.0",
+        "pkg:cargo/serde_json@1.0.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/serde_json@1.0.0",
+      "dependsOn": [
+        "pkg:cargo/serde@1.0.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/serde@1.0.0"
+    }
+  ],
+  "citations": [
+    {
+      "attributedTo": "pkg:cargo/sbom-walker@0.18.1",
+      "timestamp": "2026-09-21T10:00:00Z",
+      "pointers": [
+        "/components/0/version"
+      ],
+      "note": "Version reported by the build tool"
+    }
+  ]
+}

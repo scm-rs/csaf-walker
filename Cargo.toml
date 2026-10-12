@@ -13,6 +13,7 @@ members = [
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.91.0"
+# Compatibility review metadata only; not a patch-compatible or republishable 0.19 release.
 version = "0.19.0"
 
 [workspace.dependencies]
@@ -60,7 +61,8 @@ sectxtlib = "0.4.0"
 sequoia-openpgp = { version = "2", default-features = false }
 serde = "1"
 strum = { version = "0.27", features = ["derive"] }
-serde-cyclonedx = "0.10.0"
+# Review-only Git pin; coordinated release version/source require maintainer approval.
+serde-cyclonedx = { package = "cyclonedx-rs", version = "=0.10.1", git = "https://github.com/scm-rs/cyclonedx-rs", rev = "11cdd723aed26af46aabb60f9e86b5645f10d8d6" }
 serde_json = "1"
 sha2 = "0.11.0"
 spdx-expression = "0.5"

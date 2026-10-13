@@ -9,7 +9,7 @@ pub struct ReportResult<'d> {
     pub total: usize,
 }
 
-pub trait ReportSink {
+pub trait ReportSink: Sync {
     fn error(&self, msg: String);
 }
 

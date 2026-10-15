@@ -230,6 +230,45 @@ fn cyclonedx_v17_inspect() {
 
 #[cfg(feature = "serde-cyclonedx")]
 #[test]
+fn cyclonedx_v17_reports_missing_citation_attribution() {
+    let mut document: serde_json::Value =
+        serde_json::from_slice(include_bytes!("data/cyclonedx.v1_7.json")).unwrap();
+    document["citations"][0]["attributedTo"] = serde_json::json!("missing-attribution");
+    let sbom = sbom_walker::Sbom::try_parse_any(&serde_json::to_vec(&document).unwrap())
+        .expect("must parse");
+    let result: Arc<Mutex<BTreeMap<String, Vec<String>>>> = Default::default();
+
+    report::check::all(&("", result.clone()), &sbom);
+
+    assert_eq!(
+        result
+            .lock()
+            .get("")
+            .expect("must report the citation reference"),
+        &["Missing citation attribution reference: missing-attribution"]
+    );
+}
+
+#[cfg(feature = "serde-cyclonedx")]
+#[test]
+fn cyclonedx_v17_accepts_citation_attributed_to_author() {
+    let mut document: serde_json::Value =
+        serde_json::from_slice(include_bytes!("data/cyclonedx.v1_7.json")).unwrap();
+    document["metadata"]["authors"] = serde_json::json!([
+        {"bom-ref": "author", "name": "Example Author"}
+    ]);
+    document["citations"][0]["attributedTo"] = serde_json::json!("author");
+    let sbom = sbom_walker::Sbom::try_parse_any(&serde_json::to_vec(&document).unwrap())
+        .expect("must parse");
+    let result: Arc<Mutex<BTreeMap<String, Vec<String>>>> = Default::default();
+
+    report::check::all(&("", result.clone()), &sbom);
+
+    assert!(result.lock().is_empty());
+}
+
+#[cfg(feature = "serde-cyclonedx")]
+#[test]
 fn issue_57_inspect() {
     let sbom = sbom_walker::Sbom::try_parse_any(include_bytes!("data/issue_57/sbom.json"))
         .expect("must parse");

@@ -36,13 +36,14 @@ url = { workspace = true, features = ["serde"] }
 # optional
 cyclonedx-bom = { workspace = true, optional = true }
 spdx-rs = { workspace = true, optional = true }
-serde-cyclonedx = { workspace = true, optional = true }
+cyclonedx-rs = { workspace = true, optional = true }
 
 # internal
 walker-common = { workspace = true, features = ["openpgp"] }
 
 [features]
 default = ["crypto-nettle", "serde-cyclonedx", "spdx-rs"]
+serde-cyclonedx = ["dep:cyclonedx-rs"]
 crypto-cng = ["sequoia-openpgp/crypto-cng"]
 crypto-nettle = ["sequoia-openpgp/crypto-nettle"]
 crypto-openssl = ["sequoia-openpgp/crypto-openssl"]

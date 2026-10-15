@@ -56,5 +56,15 @@ impl CycloneDxChecks<'_> {
                 }
             }
         }
+
+        for citation in self.sbom.citations().into_iter().flatten() {
+            if let Some(attributed_to) = citation.attributed_to.as_deref()
+                && !bom_refs.contains_key(attributed_to)
+            {
+                self.report.error(format!(
+                    "Missing citation attribution reference: {attributed_to}"
+                ));
+            }
+        }
     }
 }

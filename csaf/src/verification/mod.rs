@@ -2,6 +2,9 @@
 //!
 //! Checks to ensure conformity with the specification.
 
+mod document;
+pub use document::Document;
+
 use crate::{
     check::Capped,
     discover::{AsDiscovered, DiscoveredAdvisory},
@@ -10,7 +13,13 @@ use crate::{
     validation::{ValidatedAdvisory, ValidatedVisitor, ValidationContext, ValidationError},
     verification::check::Check,
 };
-use csaf::json::JsonSource;
+use csaf_rs::{
+    json::JsonSource,
+    schema::{
+        csaf2_0::schema::CommonSecurityAdvisoryFramework as Csaf20,
+        csaf2_1::schema::CommonSecurityAdvisoryFramework as Csaf21,
+    },
+};
 use serde::de::Error as _;
 use std::{
     collections::{HashMap, HashSet},
@@ -28,17 +37,17 @@ pub mod check;
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Csaf {
-    V2_0(csaf::schema::csaf2_0::schema::CommonSecurityAdvisoryFramework),
-    V2_1(csaf::schema::csaf2_1::schema::CommonSecurityAdvisoryFramework),
+    V2_0(Box<Document<Csaf20>>),
+    V2_1(Box<Document<Csaf21>>),
 }
 
 impl Csaf {
     pub fn parse<T: JsonSource>(data: T) -> Result<Self, std::io::Error> {
-        use csaf::csaf::loader::*;
+        use csaf_rs::csaf::loader::*;
 
         detect_version_with(data).and_then(|VersionAndData { version, data }| match &*version {
-            "2.0" => Ok(Csaf::V2_0(data.parse()?)),
-            "2.1" => Ok(Csaf::V2_1(data.parse()?)),
+            "2.0" => Ok(Csaf::V2_0(Box::new(Document::new(data)?))),
+            "2.1" => Ok(Csaf::V2_1(Box::new(Document::new(data)?))),
             _ => Err(std::io::Error::new(
                 std::io::ErrorKind::Unsupported,
                 format!("Unsupported CSAF version: {}", version),
@@ -56,8 +65,8 @@ impl Csaf {
 
 #[non_exhaustive]
 pub enum DocumentLevelMetadata<'a> {
-    V2_0(&'a csaf::schema::csaf2_0::schema::DocumentLevelMetaData),
-    V2_1(&'a csaf::schema::csaf2_1::schema::DocumentLevelMetaData),
+    V2_0(&'a csaf_rs::schema::csaf2_0::schema::DocumentLevelMetaData),
+    V2_1(&'a csaf_rs::schema::csaf2_1::schema::DocumentLevelMetaData),
 }
 
 impl DocumentLevelMetadata<'_> {
@@ -78,8 +87,8 @@ impl DocumentLevelMetadata<'_> {
 
 #[non_exhaustive]
 pub enum Tracking<'a> {
-    V2_0(&'a csaf::schema::csaf2_0::schema::Tracking),
-    V2_1(&'a csaf::schema::csaf2_1::schema::Tracking),
+    V2_0(&'a csaf_rs::schema::csaf2_0::schema::Tracking),
+    V2_1(&'a csaf_rs::schema::csaf2_1::schema::Tracking),
 }
 
 impl Tracking<'_> {

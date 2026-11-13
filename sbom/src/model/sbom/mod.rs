@@ -244,9 +244,12 @@ impl Sbom {
     #[cfg(feature = "cyclonedx-bom")]
     #[allow(deprecated)]
     pub fn try_cyclonedx_xml(data: &[u8]) -> Result<Self, cyclonedx_bom::errors::XmlReadError> {
-        Ok(Self::CycloneDx(
-            cyclonedx_bom::prelude::Bom::parse_from_xml_v1_3(data)?,
-        ))
+        use cyclonedx_bom::{models::bom::SpecVersion, prelude::Bom};
+
+        Ok(Self::CycloneDx(Bom::parse_from_xml_with_version(
+            data,
+            SpecVersion::V1_3,
+        )?))
     }
 
     #[cfg(feature = "serde-cyclonedx")]

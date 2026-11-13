@@ -2,7 +2,7 @@ pub use crate::check::CheckError;
 
 use crate::{check::Capped, verification::Csaf};
 use async_trait::async_trait;
-use csaf::validation::{TestResultStatus, Validatable, ValidationError};
+use csaf_rs::validation::{TestResultStatus, Validatable, ValidationError};
 use parking_lot::Mutex;
 use std::{collections::HashMap, collections::HashSet, sync::Arc};
 
@@ -224,8 +224,8 @@ impl CsafValidation {
 impl Check for CsafValidation {
     async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
         match csaf {
-            Csaf::V2_0(csaf) => self.validate(csaf),
-            Csaf::V2_1(csaf) => self.validate(csaf),
+            Csaf::V2_0(csaf) => self.validate(&**csaf),
+            Csaf::V2_1(csaf) => self.validate(&**csaf),
         }
     }
 }

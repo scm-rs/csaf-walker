@@ -2,7 +2,7 @@ use crate::retrieve::{RetrievalMetadata, RetrievedDigest};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Sha512};
-use std::{path::Path, time::SystemTime};
+use std::{fs::File, path::Path, time::SystemTime};
 use tokio::fs;
 
 pub const ATTR_ETAG: &str = "etag";
@@ -112,9 +112,11 @@ pub async fn store_document(file: &Path, document: Document<'_>) -> Result<(), S
             .metadata
             .last_modification
             .map(SystemTime::from)
-            .unwrap_or_else(|| document.changed)
-            .into();
-        filetime::set_file_mtime(file, mtime)
+            .unwrap_or_else(|| document.changed);
+        File::options()
+            .write(true)
+            .open(file)
+            .and_then(|f| f.set_modified(mtime))
             .with_context(|| {
                 format!(
                     "Failed to set last modification timestamp: {}",

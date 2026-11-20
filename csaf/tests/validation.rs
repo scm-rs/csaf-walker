@@ -1,4 +1,4 @@
-//! Validation through [`Csaf`] must produce the same results as using csaf-rs directly.
+//! Validation through [`RawCsaf`] must produce the same results as using csaf-rs directly.
 
 #![cfg(feature = "csaf")]
 
@@ -11,7 +11,7 @@ use csaf_rs::{
 use csaf_walker::{
     check::Capped,
     verification::{
-        Csaf,
+        RawCsaf,
         check::{Check, CsafValidation},
     },
 };
@@ -54,8 +54,8 @@ fn reference(
     findings
 }
 
-/// Findings of csaf-walker, validating a [`Csaf`].
-async fn walker(csaf: &Csaf, preset: &str) -> Vec<Finding> {
+/// Findings of csaf-walker, validating a [`RawCsaf`].
+async fn walker(csaf: &RawCsaf, preset: &str) -> Vec<Finding> {
     // a cap of zero disables capping
     let result = CsafValidation::new(preset)
         .with_max_issues_per_test(0)
@@ -81,7 +81,7 @@ async fn walker(csaf: &Csaf, preset: &str) -> Vec<Finding> {
     findings
 }
 
-/// Validating through [`Csaf`] must give the same results as csaf-rs' own [`RawDocument`].
+/// Validating through [`RawCsaf`] must give the same results as csaf-rs' own [`RawDocument`].
 ///
 /// This compares the result of every single test, including passing and skipped ones, so tests
 /// which silently don't run are caught. It also compares the findings of [`CsafValidation`] for
@@ -91,7 +91,7 @@ async fn walker(csaf: &Csaf, preset: &str) -> Vec<Finding> {
 /// fails test 6.1.15, which csaf-rs only runs on the raw JSON.
 ///
 /// `rhba-2023_0564.json` is not part of this, as it doesn't deserialize and so can't be parsed
-/// into a [`Csaf`].
+/// into a [`RawCsaf`].
 #[rstest]
 #[case::rhsa_2021_3029("test-data/rhsa-2021_3029.json")] // valid schema, fails 6.1.1 (missing product ID definition) once
 #[case::rhsa_2023_3408("test-data/rhsa-2023_3408.json")] // fails the raw-only schema test once, and 6.1.27.11
@@ -105,8 +105,8 @@ async fn same_results_as_csaf_rs(#[case] file: &str) {
     // csaf-rs' own loader, creating a `RawDocument`
     let reference_document: RawDocument<CommonSecurityAdvisoryFramework> =
         load_document(&path).unwrap();
-    let csaf = Csaf::parse(&path).unwrap();
-    let Csaf::V2_0(document) = &csaf else {
+    let csaf = RawCsaf::parse(&path).unwrap();
+    let RawCsaf::V2_0(document) = &csaf else {
         panic!("{file}: expected a CSAF 2.0 document");
     };
 

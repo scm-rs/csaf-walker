@@ -1,6 +1,6 @@
 pub use crate::check::CheckError;
 
-use crate::{check::Capped, verification::Csaf};
+use crate::{check::Capped, verification::RawCsaf};
 use async_trait::async_trait;
 use csaf_rs::validation::{TestResultStatus, Validatable, ValidationError};
 use parking_lot::Mutex;
@@ -98,16 +98,16 @@ impl CheckResult {
 #[async_trait]
 pub trait Check: Send + Sync {
     /// Perform a check on a CSAF document
-    async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult>;
+    async fn check(&self, csaf: &RawCsaf) -> anyhow::Result<CheckResult>;
 }
 
 /// Implementation to allow a simple function style check
 #[async_trait]
 impl<F> Check for F
 where
-    F: Fn(&Csaf) -> Vec<CheckError> + Send + Sync,
+    F: Fn(&RawCsaf) -> Vec<CheckError> + Send + Sync,
 {
-    async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
+    async fn check(&self, csaf: &RawCsaf) -> anyhow::Result<CheckResult> {
         let errors = (self)(csaf);
         Ok(CheckResult {
             errors: Capped::from_iter(errors),
@@ -222,10 +222,10 @@ impl CsafValidation {
 
 #[async_trait]
 impl Check for CsafValidation {
-    async fn check(&self, csaf: &Csaf) -> anyhow::Result<CheckResult> {
+    async fn check(&self, csaf: &RawCsaf) -> anyhow::Result<CheckResult> {
         match csaf {
-            Csaf::V2_0(csaf) => self.validate(&**csaf),
-            Csaf::V2_1(csaf) => self.validate(&**csaf),
+            RawCsaf::V2_0(csaf) => self.validate(&**csaf),
+            RawCsaf::V2_1(csaf) => self.validate(&**csaf),
         }
     }
 }

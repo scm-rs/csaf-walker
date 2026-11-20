@@ -2,9 +2,6 @@
 //!
 //! Checks to ensure conformity with the specification.
 
-mod document;
-pub use document::Document;
-
 use crate::{
     check::Capped,
     discover::{AsDiscovered, DiscoveredAdvisory},
@@ -14,6 +11,7 @@ use crate::{
     verification::check::Check,
 };
 use csaf_rs::{
+    csaf::raw::{HasParsed, RawDocument},
     json::JsonSource,
     schema::{
         csaf2_0::schema::CommonSecurityAdvisoryFramework as Csaf20,
@@ -26,6 +24,7 @@ use std::{
     fmt::{Debug, Display},
     future::Future,
     hash::Hash,
+    io::{self, ErrorKind},
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -37,28 +36,65 @@ pub mod check;
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Csaf {
-    V2_0(Box<Document<Csaf20>>),
-    V2_1(Box<Document<Csaf21>>),
+    V2_0(Box<RawDocument<Csaf20>>),
+    V2_1(Box<RawDocument<Csaf21>>),
+}
+
+/// Create a raw document, ensuring that it deserializes.
+fn raw_document<T>(data: serde_json::Value) -> Result<Box<RawDocument<T>>, io::Error>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let document = RawDocument::new(data);
+    if let Err(err) = document.get_parsed() {
+        return Err(io::Error::new(ErrorKind::InvalidData, err.clone()));
+    }
+    Ok(Box::new(document))
+}
+
+/// Get the parsed document of a raw document.
+///
+/// # Panics
+///
+/// Panics if the raw document doesn't deserialize. This can't happen for a [`Csaf`] created by
+/// [`Csaf::parse`].
+fn parsed<T>(document: &RawDocument<T>) -> &T
+where
+    T: serde::de::DeserializeOwned,
+{
+    document
+        .get_parsed()
+        .as_ref()
+        .expect("CSAF document must deserialize")
 }
 
 impl Csaf {
-    pub fn parse<T: JsonSource>(data: T) -> Result<Self, std::io::Error> {
+    /// Parse a CSAF document.
+    ///
+    /// This fails if the document doesn't deserialize into the detected CSAF version.
+    pub fn parse<T: JsonSource>(data: T) -> Result<Self, io::Error> {
         use csaf_rs::csaf::loader::*;
 
         detect_version_with(data).and_then(|VersionAndData { version, data }| match &*version {
-            "2.0" => Ok(Csaf::V2_0(Box::new(Document::new(data)?))),
-            "2.1" => Ok(Csaf::V2_1(Box::new(Document::new(data)?))),
-            _ => Err(std::io::Error::new(
-                std::io::ErrorKind::Unsupported,
+            "2.0" => Ok(Csaf::V2_0(raw_document(data)?)),
+            "2.1" => Ok(Csaf::V2_1(raw_document(data)?)),
+            _ => Err(io::Error::new(
+                ErrorKind::Unsupported,
                 format!("Unsupported CSAF version: {}", version),
             )),
         })
     }
 
+    /// Document level metadata.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the document doesn't deserialize. This can't happen for a [`Csaf`] created by
+    /// [`Csaf::parse`].
     pub fn document(&self) -> DocumentLevelMetadata<'_> {
         match self {
-            Self::V2_0(csaf) => DocumentLevelMetadata::V2_0(&csaf.document),
-            Self::V2_1(csaf) => DocumentLevelMetadata::V2_1(&csaf.document),
+            Self::V2_0(csaf) => DocumentLevelMetadata::V2_0(&parsed(csaf).document),
+            Self::V2_1(csaf) => DocumentLevelMetadata::V2_1(&parsed(csaf).document),
         }
     }
 }

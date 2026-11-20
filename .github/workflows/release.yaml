@@ -50,10 +50,10 @@ jobs:
             args: --features vendored,crypto-openssl,walker-common/lzma,csaf --no-default-features
 
           - target: x86_64-apple-darwin
-            os: macos-15-intel
+            os: macos-26-intel
             args: --features vendored,crypto-openssl,walker-common/lzma,csaf --no-default-features
           - target: aarch64-apple-darwin
-            os: macos-15
+            os: macos-26
             args: --features vendored,crypto-openssl,walker-common/lzma,csaf --no-default-features
 
           - target: x86_64-pc-windows-msvc

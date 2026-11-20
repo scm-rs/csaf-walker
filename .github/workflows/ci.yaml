@@ -37,7 +37,7 @@ jobs:
             "skip_all_features": true
           },
           {
-            "os": "macos-15",
+            "os": "macos-26",
             "args": "--features crypto-openssl,csaf --no-default-features",
             "skip_all_features": true
           }

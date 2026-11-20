@@ -1,5 +1,5 @@
 use csaf_walker::verification::{
-    Csaf,
+    RawCsaf,
     check::{Check, CsafValidation, DEFAULT_MAX_ISSUES_PER_TEST},
 };
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ impl Validate {
         progress.start(1);
 
         let data = std::fs::read(&self.file)?;
-        let csaf = Csaf::parse(&*data)?;
+        let csaf = RawCsaf::parse(&*data)?;
 
         let check =
             CsafValidation::new(&self.preset).with_max_issues_per_test(self.max_issues_per_test);

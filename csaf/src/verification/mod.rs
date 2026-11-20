@@ -18,7 +18,7 @@ use csaf_rs::{
         csaf2_1::schema::CommonSecurityAdvisoryFramework as Csaf21,
     },
 };
-use serde::de::Error as _;
+use serde::de::{DeserializeOwned, Error as _};
 use std::{
     collections::{HashMap, HashSet},
     fmt::{Debug, Display},
@@ -33,17 +33,42 @@ use walker_common::{retrieve::RetrievalError, utils::url::Urlify};
 
 pub mod check;
 
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub enum Csaf {
-    V2_0(Box<RawDocument<Csaf20>>),
-    V2_1(Box<RawDocument<Csaf21>>),
+/// Detect the CSAF version of a document, and convert it using the matching function.
+fn detect<T, R>(
+    data: T,
+    v2_0: impl FnOnce(serde_json::Value) -> Result<R, io::Error>,
+    v2_1: impl FnOnce(serde_json::Value) -> Result<R, io::Error>,
+) -> Result<R, io::Error>
+where
+    T: JsonSource,
+{
+    use csaf_rs::csaf::loader::*;
+
+    let VersionAndData { version, data } = detect_version_with(data)?;
+    match &*version {
+        "2.0" => v2_0(data),
+        "2.1" => v2_1(data),
+        _ => Err(io::Error::new(
+            ErrorKind::Unsupported,
+            format!("Unsupported CSAF version: {version}"),
+        )),
+    }
+}
+
+/// Deserialize a document.
+fn document<T>(data: serde_json::Value) -> Result<Box<T>, io::Error>
+where
+    T: DeserializeOwned,
+{
+    serde_json::from_value(data)
+        .map(Box::new)
+        .map_err(|err| io::Error::new(ErrorKind::InvalidData, err))
 }
 
 /// Create a raw document, ensuring that it deserializes.
 fn raw_document<T>(data: serde_json::Value) -> Result<Box<RawDocument<T>>, io::Error>
 where
-    T: serde::de::DeserializeOwned,
+    T: DeserializeOwned,
 {
     let document = RawDocument::new(data);
     if let Err(err) = document.get_parsed() {
@@ -52,20 +77,14 @@ where
     Ok(Box::new(document))
 }
 
-/// Get the parsed document of a raw document.
+/// A parsed CSAF document.
 ///
-/// # Panics
-///
-/// Panics if the raw document doesn't deserialize. This can't happen for a [`Csaf`] created by
-/// [`Csaf::parse`].
-fn parsed<T>(document: &RawDocument<T>) -> &T
-where
-    T: serde::de::DeserializeOwned,
-{
-    document
-        .get_parsed()
-        .as_ref()
-        .expect("CSAF document must deserialize")
+/// This only keeps the deserialized document. Use [`RawCsaf`] for validating a document.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum Csaf {
+    V2_0(Box<Csaf20>),
+    V2_1(Box<Csaf21>),
 }
 
 impl Csaf {
@@ -73,29 +92,59 @@ impl Csaf {
     ///
     /// This fails if the document doesn't deserialize into the detected CSAF version.
     pub fn parse<T: JsonSource>(data: T) -> Result<Self, io::Error> {
-        use csaf_rs::csaf::loader::*;
+        detect(
+            data,
+            |data| Ok(Self::V2_0(document(data)?)),
+            |data| Ok(Self::V2_1(document(data)?)),
+        )
+    }
 
-        detect_version_with(data).and_then(|VersionAndData { version, data }| match &*version {
-            "2.0" => Ok(Csaf::V2_0(raw_document(data)?)),
-            "2.1" => Ok(Csaf::V2_1(raw_document(data)?)),
-            _ => Err(io::Error::new(
-                ErrorKind::Unsupported,
-                format!("Unsupported CSAF version: {}", version),
-            )),
-        })
+    /// Document level metadata.
+    pub fn document(&self) -> DocumentLevelMetadata<'_> {
+        match self {
+            Self::V2_0(csaf) => DocumentLevelMetadata::V2_0(&csaf.document),
+            Self::V2_1(csaf) => DocumentLevelMetadata::V2_1(&csaf.document),
+        }
+    }
+}
+
+/// A CSAF document, keeping its raw JSON.
+///
+/// Some csaf-rs tests (like the schema validation) only run on the raw JSON. So this is
+/// required for validating a document. It keeps the raw JSON as well as the deserialized
+/// document, so it requires more memory than [`Csaf`].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum RawCsaf {
+    V2_0(Box<RawDocument<Csaf20>>),
+    V2_1(Box<RawDocument<Csaf21>>),
+}
+
+impl RawCsaf {
+    /// Parse a CSAF document.
+    ///
+    /// This fails if the document doesn't deserialize into the detected CSAF version.
+    pub fn parse<T: JsonSource>(data: T) -> Result<Self, io::Error> {
+        detect(
+            data,
+            |data| Ok(Self::V2_0(raw_document(data)?)),
+            |data| Ok(Self::V2_1(raw_document(data)?)),
+        )
     }
 
     /// Document level metadata.
     ///
-    /// # Panics
-    ///
-    /// Panics if the document doesn't deserialize. This can't happen for a [`Csaf`] created by
-    /// [`Csaf::parse`].
-    pub fn document(&self) -> DocumentLevelMetadata<'_> {
-        match self {
-            Self::V2_0(csaf) => DocumentLevelMetadata::V2_0(&parsed(csaf).document),
-            Self::V2_1(csaf) => DocumentLevelMetadata::V2_1(&parsed(csaf).document),
-        }
+    /// Returns `None` if the document doesn't deserialize. This can't happen for a [`RawCsaf`]
+    /// created by [`RawCsaf::parse`].
+    pub fn document(&self) -> Option<DocumentLevelMetadata<'_>> {
+        Some(match self {
+            Self::V2_0(csaf) => {
+                DocumentLevelMetadata::V2_0(&csaf.get_parsed().as_ref().ok()?.document)
+            }
+            Self::V2_1(csaf) => {
+                DocumentLevelMetadata::V2_1(&csaf.get_parsed().as_ref().ok()?.document)
+            }
+        })
     }
 }
 
@@ -152,7 +201,7 @@ where
     /// The advisory that was verified.
     pub advisory: A,
     /// The parsed CSAF document.
-    pub csaf: Csaf,
+    pub csaf: RawCsaf,
     /// Per-check mandatory failures (errors).
     pub errors: HashMap<I, Capped>,
     /// Per-check optional/recommended failures (warnings).
@@ -307,7 +356,7 @@ where
     async fn verify(&self, advisory: A) -> Result<VerifiedAdvisory<A, I>, VerificationError<E, A>> {
         let data = advisory.as_retrieved().data.clone();
 
-        let csaf = match tokio::task::spawn_blocking(move || Csaf::parse(&*data)).await {
+        let csaf = match tokio::task::spawn_blocking(move || RawCsaf::parse(&*data)).await {
             Ok(Ok(csaf)) => csaf,
             Ok(Err(error)) => {
                 return Err(VerificationError::Parsing {

@@ -19,7 +19,7 @@ bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "color"] }
 flexible-time = { workspace = true }
 html-escape = { workspace = true }
-humantime = { workspace = true }
+jiff = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }

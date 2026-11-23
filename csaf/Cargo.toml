@@ -25,7 +25,7 @@ fsquirrel = { workspace = true }
 futures = { workspace = true }
 hickory-resolver = { workspace = true, features = ["tokio"] }
 html-escape = { workspace = true }
-humantime = { workspace = true }
+jiff = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 percent-encoding = { workspace = true }

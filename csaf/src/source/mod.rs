@@ -36,10 +36,12 @@ pub trait Source: walker_common::source::Source + Clone + Debug {
 /// A common way to create a new CSAF source.
 pub async fn new_source(
     discover: impl Into<DiscoverConfig>,
-    fetcher: impl Into<FetcherOptions>,
+    fetcher: impl TryInto<FetcherOptions, Error: Into<anyhow::Error>>,
 ) -> anyhow::Result<DispatchSource> {
     let discover = discover.into();
 
     let descriptor = SourceDescriptor::from_str(&discover.source)?;
-    descriptor.into_source(discover, fetcher.into()).await
+    descriptor
+        .into_source(discover, fetcher.try_into().map_err(Into::into)?)
+        .await
 }

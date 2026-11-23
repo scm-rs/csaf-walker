@@ -9,7 +9,10 @@ use std::{
     time::SystemTime,
 };
 use tokio::fs;
-use walker_common::{utils::url::Urlify, validate::ValidationError};
+use walker_common::{
+    utils::{time::Human, url::Urlify},
+    validate::ValidationError,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<VE: Display + Debug> {
@@ -64,10 +67,10 @@ impl<V: DiscoveredVisitor> DiscoveredVisitor for SkipExistingVisitor<V> {
 
             log::debug!(
                 "Advisory modified: {}, file ({}) modified: {} ({:?})",
-                humantime::Timestamp::from(sbom.modified),
+                Human(sbom.modified),
                 name.to_string_lossy(),
-                humantime::Timestamp::from(file_modified),
-                self.since.map(humantime::Timestamp::from)
+                Human(file_modified),
+                self.since.map(Human)
             );
 
             if file_modified >= sbom.modified {

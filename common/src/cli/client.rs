@@ -1,11 +1,15 @@
-use crate::fetcher::{FetchAuthentication, Fetcher, FetcherOptions};
+use crate::{
+    fetcher::{FetchAuthentication, Fetcher, FetcherOptions},
+    utils::time::SpanExt,
+};
+use jiff::Span;
 
 #[derive(clap::Parser)]
 #[command(next_help_heading = "Client")]
 pub struct ClientArguments {
-    /// Per-request HTTP timeout, in humantime duration format.
+    /// Per-request HTTP timeout (e.g. `5s`, `1m 30s`, or ISO 8601 `PT5S`).
     #[arg(short, long, default_value = "5s")]
-    pub timeout: humantime::Duration,
+    pub timeout: Span,
 
     /// Per-request retries count
     #[arg(short, long, default_value = "5")]
@@ -13,7 +17,7 @@ pub struct ClientArguments {
 
     /// Per-request minimum delay after rate limit (429).
     #[arg(long, default_value = "10s")]
-    pub default_retry_after: humantime::Duration,
+    pub default_retry_after: Span,
 
     /// The user agent to send with requests.
     #[arg(long, default_value = crate::USER_AGENT)]
@@ -63,12 +67,14 @@ impl std::fmt::Debug for ClientArguments {
     }
 }
 
-impl From<ClientArguments> for FetcherOptions {
-    fn from(value: ClientArguments) -> Self {
+impl TryFrom<ClientArguments> for FetcherOptions {
+    type Error = anyhow::Error;
+
+    fn try_from(value: ClientArguments) -> Result<Self, Self::Error> {
         let mut options = FetcherOptions::new()
-            .timeout(value.timeout)
+            .timeout(value.timeout.to_std_duration()?)
             .retries(value.retries)
-            .retry_after(value.default_retry_after.into())
+            .retry_after(value.default_retry_after.to_std_duration()?)
             .user_agent(value.user_agent);
         let authentication = if let Some(token) = value.fetch_bearer_token {
             Some(FetchAuthentication::Bearer(token))
@@ -91,14 +97,14 @@ impl From<ClientArguments> for FetcherOptions {
         if let Some(authentication) = authentication {
             options = options.authentication(authentication);
         }
-        options
+        Ok(options)
     }
 }
 
 impl ClientArguments {
     /// Create a new [`Fetcher`] from arguments.
     pub async fn new_fetcher(self) -> Result<Fetcher, anyhow::Error> {
-        Fetcher::new(self.into()).await
+        Fetcher::new(self.try_into()?).await
     }
 }
 

@@ -1,8 +1,10 @@
 use crate::visitors::SendVisitor;
+use jiff::Span;
 use reqwest::Url;
 use std::path::PathBuf;
-use walker_common::sender::{
-    HttpSender, HttpSenderOptions, provider::OpenIdTokenProviderConfigArguments,
+use walker_common::{
+    sender::{HttpSender, HttpSenderOptions, provider::OpenIdTokenProviderConfigArguments},
+    utils::time::SpanExt,
 };
 
 #[derive(Debug, clap::Parser)]
@@ -18,7 +20,7 @@ pub struct SendArguments {
         env = "SENDER_CONNECT_TIMEOUT",
         default_value = "15s"
     )]
-    pub connect_timeout: humantime::Duration,
+    pub connect_timeout: Span,
 
     /// Sender request timeout
     #[arg(
@@ -27,7 +29,7 @@ pub struct SendArguments {
         env = "SENDER_TIMEOUT",
         default_value = "5m"
     )]
-    pub timeout: humantime::Duration,
+    pub timeout: Span,
 
     /// Additional root certificates
     #[arg(id = "sender-tls-ca-certificate", long)]
@@ -53,7 +55,7 @@ pub struct SendArguments {
         env = "SENDER_MIN_DELAY",
         default_value = "1s"
     )]
-    pub min_delay: humantime::Duration,
+    pub min_delay: Span,
 
     /// Maximum delay between retries
     #[arg(
@@ -62,7 +64,7 @@ pub struct SendArguments {
         env = "SENDER_MAX_DELAY",
         default_value = "60s"
     )]
-    pub max_delay: humantime::Duration,
+    pub max_delay: Span,
 
     /// Custom query parameters
     #[arg(
@@ -96,8 +98,8 @@ impl SendArguments {
         let sender = HttpSender::new(
             provider,
             HttpSenderOptions::default()
-                .connect_timeout(Some(connect_timeout.into()))
-                .timeout(Some(timeout.into()))
+                .connect_timeout(connect_timeout.to_std_duration()?)
+                .timeout(timeout.to_std_duration()?)
                 .tls_insecure(tls_insecure)
                 .additional_root_certificates(additional_root_certificates)
                 .query_parameters(query.into_iter().map(|entry| match entry.split_once('=') {
@@ -109,7 +111,7 @@ impl SendArguments {
 
         Ok(SendVisitor::new(target, sender)
             .retries(retries)
-            .min_delay(min_delay)
-            .max_delay(max_delay))
+            .min_delay(min_delay.to_std_duration()?)
+            .max_delay(max_delay.to_std_duration()?))
     }
 }

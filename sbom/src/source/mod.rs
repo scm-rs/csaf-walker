@@ -31,7 +31,7 @@ pub trait Source: walker_common::source::Source + Clone + Debug {
 
 pub async fn new_source(
     discover: impl Into<DiscoverConfig>,
-    fetcher: impl Into<FetcherOptions>,
+    fetcher: impl TryInto<FetcherOptions, Error: Into<anyhow::Error>>,
 ) -> anyhow::Result<DispatchSource> {
     let discover = discover.into();
     let source = discover.source;
@@ -45,7 +45,7 @@ pub async fn new_source(
             }
             Some(_scheme) => {
                 log::debug!("Creating HTTP source: {source}");
-                let fetcher = Fetcher::new(fetcher.into()).await?;
+                let fetcher = Fetcher::new(fetcher.try_into().map_err(Into::into)?).await?;
                 Ok(HttpSource::new(
                     Url::parse(&source)?,
                     fetcher,

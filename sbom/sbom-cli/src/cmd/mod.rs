@@ -1,5 +1,6 @@
 use anyhow::Context;
 use flexible_time::timestamp::StartTimestamp;
+use jiff::Span;
 use reqwest::Url;
 use sbom_walker::visitors::store::StoreVisitor;
 use std::path::PathBuf;
@@ -59,7 +60,7 @@ pub struct SkipArguments {
     #[arg(short = 'S', long)]
     pub since_file: Option<PathBuf>,
 
-    /// A delta to add to the value loaded from the since-state file.
-    #[arg(long)]
-    pub since_file_offset: Option<humantime::Duration>,
+    /// A delta to add to the value loaded from the since-state file (e.g. `-1h`, `1d`).
+    #[arg(long, allow_hyphen_values = true)]
+    pub since_file_offset: Option<Span>,
 }

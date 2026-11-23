@@ -1,6 +1,6 @@
 //! Working with durations and timestamps
 
-use jiff::{Span, SpanRound, Timestamp, Unit, ZonedDateTime};
+use jiff::{Span, SpanRound, Timestamp, Unit, tz::TimeZone};
 use std::{
     fmt::{self, Display, Formatter},
     time::{Duration, SystemTime},
@@ -10,15 +10,15 @@ use std::{
 pub trait SpanExt {
     /// Resolve to an absolute, non-negative duration.
     ///
-    /// Calendar units (like months or years) are resolved relative to now.
+    /// Calendar units (like months or years) are resolved relative to now, in UTC. So days
+    /// are always 24 hours, independent of the local time zone and daylight saving time.
     fn to_std_duration(&self) -> anyhow::Result<Duration>;
 }
 
 impl SpanExt for Span {
     fn to_std_duration(&self) -> anyhow::Result<Duration> {
-        Ok(Duration::try_from(
-            self.to_duration(&ZonedDateTime::now())?,
-        )?)
+        let now = Timestamp::now().to_zoned_datetime(TimeZone::UTC);
+        Ok(Duration::try_from(self.to_duration(&now)?)?)
     }
 }
 

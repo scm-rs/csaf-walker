@@ -94,10 +94,7 @@ impl Fetch {
         let since = Since::new(
             self.skip.since,
             self.skip.since_file,
-            self.skip
-                .since_file_offset
-                .map(|d| d.into())
-                .unwrap_or_default(),
+            self.skip.since_file_offset.unwrap_or_default(),
         )?;
 
         let show = async |doc| {

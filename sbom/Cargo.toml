@@ -20,7 +20,7 @@ csv = { workspace = true }
 digest = { workspace = true }
 fluent-uri = { workspace = true }
 futures = { workspace = true }
-humantime = { workspace = true }
+jiff = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }

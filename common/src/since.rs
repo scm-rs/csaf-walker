@@ -1,9 +1,11 @@
 //! Handling of detecting changes "since"
+use crate::utils::time::Human;
+use jiff::{Span, Timestamp, tz::TimeZone};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct SinceState {
@@ -59,18 +61,23 @@ impl Since {
     pub fn new(
         since: Option<impl Into<SystemTime>>,
         since_file: Option<PathBuf>,
-        since_file_offset: Duration,
+        since_file_offset: Span,
     ) -> anyhow::Result<Self> {
         let since = match (since, &since_file) {
             // try file, then fall back to dedicated "since"
             (skip, Some(file)) => match SinceState::load_from(file)? {
                 Some(since) => {
-                    let result = since.last_run + since_file_offset;
+                    let result = SystemTime::try_from(
+                        Timestamp::try_from(since.last_run)?
+                            .to_zoned_datetime(TimeZone::UTC)
+                            .checked_add(since_file_offset)?
+                            .timestamp(),
+                    )?;
                     log::info!(
                         "Since state from file - last run: {}, offset: {} = {}",
-                        humantime::Timestamp::from(since.last_run),
-                        humantime::Duration::from(since_file_offset),
-                        humantime::Timestamp::from(result),
+                        Human(since.last_run),
+                        Human(since_file_offset),
+                        Human(result),
                     );
                     Some(result)
                 }
@@ -79,7 +86,7 @@ impl Since {
             // dedicated "since" value
             (Some(skip), None) => {
                 let since = skip.into();
-                log::info!("Using provided since {}", humantime::Timestamp::from(since));
+                log::info!("Using provided since {}", Human(since));
                 Some(since)
             }
             // no "since" at all
@@ -97,10 +104,7 @@ impl Since {
 
     pub fn store(self) -> anyhow::Result<()> {
         if let Some(path) = &self.since_file {
-            log::info!(
-                "Storing last_run = {}",
-                humantime::Timestamp::from(self.last_run)
-            );
+            log::info!("Storing last_run = {}", Human(self.last_run));
             SinceState {
                 last_run: self.last_run,
             }

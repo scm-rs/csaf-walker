@@ -5,10 +5,10 @@ use std::{ops::Deref, sync::Arc};
 use tokio::sync::RwLock;
 
 #[cfg(feature = "clap")]
-use {anyhow::Context, url::Url};
+use {crate::utils::time::SpanExt, anyhow::Context, jiff::Span, url::Url};
 
 #[cfg(feature = "clap")]
-#[derive(Clone, Debug, PartialEq, Eq, clap::Args)]
+#[derive(Clone, Debug, clap::Args)]
 #[cfg_attr(feature = "clap", command(next_help_heading = "OIDC"))]
 pub struct OpenIdTokenProviderConfigArguments {
     /// The client ID for using Open ID connect
@@ -42,7 +42,7 @@ pub struct OpenIdTokenProviderConfigArguments {
         env = "OIDC_REFRESH_BEFORE",
         default_value = "30s"
     )]
-    pub refresh_before: humantime::Duration,
+    pub refresh_before: Span,
     /// Allows using TLS in an insecure mode when connecting the OIDC issuer (DANGER!)
     #[arg(
         id = "oidc_tls_insecure",
@@ -67,12 +67,12 @@ impl OpenIdTokenProviderConfigArguments {
 }
 
 #[cfg(feature = "clap")]
-#[derive(Clone, Debug, PartialEq, Eq, clap::Args)]
+#[derive(Clone, Debug, clap::Args)]
 pub struct OpenIdTokenProviderConfig {
     pub client_id: String,
     pub client_secret: String,
     pub issuer_url: String,
-    pub refresh_before: humantime::Duration,
+    pub refresh_before: Span,
     pub tls_insecure: bool,
     pub tls_ca_certificates: Vec<std::path::PathBuf>,
 }
@@ -174,9 +174,7 @@ impl OpenIdTokenProvider {
 
         Ok(Self::new(
             client,
-            time::Duration::try_from(<_ as Into<std::time::Duration>>::into(
-                config.refresh_before,
-            ))?,
+            time::Duration::try_from(config.refresh_before.to_std_duration()?)?,
         ))
     }
 

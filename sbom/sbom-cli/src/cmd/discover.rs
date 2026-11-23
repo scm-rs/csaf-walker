@@ -4,6 +4,7 @@ use std::convert::Infallible;
 use walker_common::{
     cli::{CommandDefaults, client::ClientArguments},
     progress::Progress,
+    utils::time::Human,
 };
 
 /// Discover SBOMs, just lists the URLs.
@@ -30,7 +31,7 @@ impl Discover {
                 progress.println(&format!(
                     "{} ({})",
                     discovered.url,
-                    humantime::format_rfc3339(discovered.modified),
+                    Human(discovered.modified),
                 ));
 
                 Ok::<_, Infallible>(())

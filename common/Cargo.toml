@@ -28,9 +28,9 @@ fsquirrel = { workspace = true }
 futures-util = { workspace = true }
 html-escape = { workspace = true }
 httpdate = { workspace = true }
-humantime = { workspace = true }
 indicatif = { workspace = true }
 indicatif-log-bridge = { workspace = true }
+jiff = { workspace = true }
 log = { workspace = true }
 openid = { workspace = true }
 pem = { workspace = true }

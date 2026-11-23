@@ -6,7 +6,7 @@ use std::fmt::{Debug, Display};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use tokio::fs;
-use walker_common::utils::url::Urlify;
+use walker_common::utils::{time::Human, url::Urlify};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<VE: Display + Debug> {
@@ -62,10 +62,10 @@ impl<V: DiscoveredVisitor> DiscoveredVisitor for SkipExistingVisitor<V> {
 
             log::debug!(
                 "Advisory modified: {}, file ({}) modified: {} ({:?})",
-                humantime::Timestamp::from(advisory.modified),
+                Human(advisory.modified),
                 name,
-                humantime::Timestamp::from(file_modified),
-                self.since.map(humantime::Timestamp::from)
+                Human(file_modified),
+                self.since.map(Human)
             );
 
             if file_modified >= advisory.modified {

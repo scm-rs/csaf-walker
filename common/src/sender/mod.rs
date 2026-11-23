@@ -42,7 +42,7 @@ impl HttpSenderOptions {
     }
 
     pub fn timeout(mut self, timeout: impl Into<Option<Duration>>) -> Self {
-        self.connect_timeout = timeout.into();
+        self.timeout = timeout.into();
         self
     }
 
@@ -162,5 +162,20 @@ impl HttpSender {
             )
             .inject_token(&self.provider)
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeouts_are_independent() {
+        let options = HttpSenderOptions::default()
+            .connect_timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(300));
+
+        assert_eq!(options.connect_timeout, Some(Duration::from_secs(15)));
+        assert_eq!(options.timeout, Some(Duration::from_secs(300)));
     }
 }

@@ -26,7 +26,7 @@ fn create_test_metadata() -> ProviderMetadata {
             directory_url: Some(Url::parse("https://example.com/advisories/").unwrap()),
             rolie: None,
         }],
-        last_updated: chrono::Utc::now(),
+        last_updated: jiff::Timestamp::now(),
         list_on_csaf_aggregators: false,
         metadata_version: MetadataVersion::V2_0,
         mirror_on_csaf_aggregators: false,

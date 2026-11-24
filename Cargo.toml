@@ -25,7 +25,6 @@ base64 = "0.23.1"
 bytes = "1"
 bzip2 = "0.6.0"
 bzip2-rs = "0.1"
-chrono = { version = "0.4.24", default-features = false }
 clap = "4.5"
 colored_json = "5"
 csaf-rs = { version = "0.7.3", default-features = false }

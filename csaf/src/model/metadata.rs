@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -114,7 +114,7 @@ pub struct ProviderMetadata {
     #[serde(default)]
     pub distributions: Vec<Distribution>,
 
-    pub last_updated: DateTime<Utc>,
+    pub last_updated: Timestamp,
 
     #[serde(rename = "list_on_CSAF_aggregators")]
     #[serde(default)]
@@ -155,6 +155,34 @@ mod test {
     use super::*;
     use rstest::rstest;
     use serde_json::json;
+
+    #[rstest]
+    #[case::utc("2026-11-24T10:20:30Z", "2026-11-24T10:20:30Z")]
+    #[case::offset("2026-11-24T11:20:30+01:00", "2026-11-24T10:20:30Z")]
+    #[case::fractional("2026-11-24T10:20:30.123456789Z", "2026-11-24T10:20:30.123456789Z")]
+    fn metadata_timestamp_roundtrip(#[case] input: &str, #[case] expected: &str) {
+        let mut metadata = json!({
+            "canonical_url": "https://example.com/provider-metadata.json",
+            "last_updated": input,
+            "metadata_version": "2.0",
+            "publisher": {
+                "category": "vendor",
+                "name": "Example",
+                "namespace": "https://example.com"
+            }
+        });
+        let parsed: ProviderMetadata = serde_json::from_value(metadata.clone()).unwrap();
+        assert_eq!(parsed.last_updated, expected.parse::<Timestamp>().unwrap());
+        let serialized = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(serialized["last_updated"], expected);
+        assert_eq!(
+            serde_json::from_value::<ProviderMetadata>(serialized).unwrap(),
+            parsed
+        );
+
+        metadata["last_updated"] = json!("invalid");
+        assert!(serde_json::from_value::<ProviderMetadata>(metadata).is_err());
+    }
 
     #[rstest]
     #[case::unlabeled(Some("UNLABELED"), TlpLabel::Unlabeled)]

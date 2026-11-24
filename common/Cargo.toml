@@ -19,7 +19,6 @@ async-trait = { workspace = true }
 backon = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
-chrono = { workspace = true, features = ["std"] }
 csv = { workspace = true }
 digest = { workspace = true }
 flexible-time = { workspace = true }

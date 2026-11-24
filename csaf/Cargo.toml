@@ -17,7 +17,6 @@ version.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
-chrono = { workspace = true, features = ["serde"] }
 csv = { workspace = true }
 digest = { workspace = true }
 fluent-uri = { workspace = true }
@@ -25,7 +24,7 @@ fsquirrel = { workspace = true }
 futures = { workspace = true }
 hickory-resolver = { workspace = true, features = ["tokio"] }
 html-escape = { workspace = true }
-jiff = { workspace = true }
+jiff = { workspace = true, features = ["serde"] }
 log = { workspace = true }
 parking_lot = { workspace = true }
 percent-encoding = { workspace = true }

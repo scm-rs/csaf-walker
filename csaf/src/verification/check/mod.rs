@@ -4,7 +4,7 @@ use crate::{check::Capped, verification::RawCsaf};
 use async_trait::async_trait;
 use csaf_rs::validation::{TestResultStatus, Validatable, ValidationError};
 use parking_lot::Mutex;
-use std::{collections::HashMap, collections::HashSet, sync::Arc};
+use std::{cell::Cell, collections::HashMap, sync::Arc};
 
 /// A `Vec` with capping support for `CheckError`.
 #[derive(Clone)]
@@ -51,14 +51,24 @@ impl Capping {
     }
 
     pub fn push(&mut self, item: CheckError) {
-        self.total += 1;
+        let CheckError { id, message } = item;
+        self.push_with(id, || message);
+    }
 
-        let (pushed, items) = self.items.entry(item.id.clone()).or_default();
-        *pushed += 1;
+    /// Counts an item, but only creates its message if the item is stored.
+    ///
+    /// This avoids allocating (or interning) messages which would be dropped by the cap.
+    pub fn push_with(&mut self, id: Arc<str>, message: impl FnOnce() -> Arc<str>) {
+        let (pushed, items) = self.items.entry(id.clone()).or_default();
 
+        // Create the message before counting, so a panic doesn't leave a phantom omitted issue.
         if self.cap == 0 || items.len() < self.cap {
-            items.push(item);
+            let message = message();
+            items.push(CheckError { id, message });
         }
+
+        *pushed += 1;
+        self.total += 1;
     }
 }
 
@@ -140,10 +150,64 @@ impl Checking {
 
 pub const DEFAULT_MAX_ISSUES_PER_TEST: usize = 25;
 
+/// Pool size below which the intern pool is never pruned.
+const MIN_PRUNE_AT: usize = 4096;
+
+/// A string intern pool which releases entries that are no longer in use.
+///
+/// Entries are kept while results still reference them, or when they were looked up again
+/// since the last prune, so messages repeating across documents stay shared.
+#[derive(Debug)]
+struct InternPool {
+    /// Interned strings, flagged when looked up again since the last prune.
+    entries: HashMap<Arc<str>, Cell<bool>>,
+    /// Pool size at which the next insert prunes unused entries first.
+    prune_at: usize,
+}
+
+impl Default for InternPool {
+    fn default() -> Self {
+        Self {
+            entries: HashMap::new(),
+            prune_at: MIN_PRUNE_AT,
+        }
+    }
+}
+
+impl InternPool {
+    /// Returns the shared instance of `s`, adding it if needed.
+    fn intern(&mut self, s: &str) -> Arc<str> {
+        if let Some((existing, hit)) = self.entries.get_key_value(s) {
+            hit.set(true);
+            return existing.clone();
+        }
+
+        if self.entries.len() >= self.prune_at {
+            self.prune();
+        }
+
+        let arc: Arc<str> = Arc::from(s);
+        self.entries.insert(arc.clone(), Cell::new(false));
+        arc
+    }
+
+    /// Drops entries which are neither referenced elsewhere nor reused since the last prune.
+    ///
+    /// The threshold doubles with the remaining size, keeping pruning amortized constant per insert.
+    fn prune(&mut self) {
+        self.entries.retain(|s, hit| {
+            // Always reset the flag, also for entries kept because they are still referenced.
+            let reused = hit.take();
+            Arc::strong_count(s) > 1 || reused
+        });
+        self.prune_at = MIN_PRUNE_AT.max(self.entries.len() * 2);
+    }
+}
+
 pub struct CsafValidation {
     pub preset: String,
     pub max_issues_per_test: usize,
-    interned: Mutex<HashSet<Arc<str>>>,
+    interned: Mutex<InternPool>,
 }
 
 impl CsafValidation {
@@ -151,7 +215,7 @@ impl CsafValidation {
         Self {
             preset: preset.into(),
             max_issues_per_test: DEFAULT_MAX_ISSUES_PER_TEST,
-            interned: Mutex::new(HashSet::new()),
+            interned: Mutex::new(InternPool::default()),
         }
     }
 
@@ -161,14 +225,7 @@ impl CsafValidation {
     }
 
     fn intern(&self, s: &str) -> Arc<str> {
-        let mut pool = self.interned.lock();
-        if let Some(existing) = pool.get(s) {
-            existing.clone()
-        } else {
-            let arc: Arc<str> = Arc::from(s);
-            pool.insert(arc.clone());
-            arc
-        }
+        self.interned.lock().intern(s)
     }
 
     fn validate<V>(&self, csaf: &V) -> anyhow::Result<CheckResult>
@@ -176,16 +233,13 @@ impl CsafValidation {
         V: Validatable,
     {
         fn collect(
-            mut result: impl Extend<CheckError>,
+            result: &mut Capping,
             errors: impl IntoIterator<Item = ValidationError>,
             id: &Arc<str>,
             intern: &dyn Fn(&str) -> Arc<str>,
         ) {
             for error in errors {
-                result.extend(Some(CheckError {
-                    id: Arc::clone(id),
-                    message: intern(&error.message),
-                }));
+                result.push_with(Arc::clone(id), || intern(&error.message));
             }
         }
 
@@ -389,5 +443,96 @@ mod test {
     fn custom_max_issues() {
         let v = CsafValidation::new("optional").with_max_issues_per_test(100);
         assert_eq!(v.max_issues_per_test, 100);
+    }
+
+    /// Messages beyond the cap are counted, but never created.
+    #[test]
+    fn push_with_skips_capped_messages() {
+        let mut capping = Capping::new(2);
+        let mut created = 0;
+        for i in 0..5 {
+            capping.push_with(Arc::from("t"), || {
+                created += 1;
+                Arc::from(format!("msg{i}"))
+            });
+        }
+        assert_eq!(created, 2);
+        let capped = capping.finish();
+        assert_eq!(capped.total, 5);
+        assert_eq!(
+            messages(&capped),
+            ["msg0", "msg1", "threshold of 2 reached, 3 issues omitted"]
+        );
+    }
+
+    /// Lookups share the same instance.
+    #[test]
+    fn intern_pool_shares_instances() {
+        let mut pool = InternPool::default();
+        let a = pool.intern("a");
+        let b = pool.intern("a");
+        assert!(Arc::ptr_eq(&a, &b));
+    }
+
+    /// Pruning keeps referenced and reused entries, and drops the rest.
+    #[test]
+    fn intern_pool_prune_keeps_used_entries() {
+        let mut pool = InternPool::default();
+        let held = pool.intern("held");
+        pool.intern("reused");
+        pool.intern("reused");
+        pool.intern("unused");
+
+        pool.prune();
+        let mut kept: Vec<_> = pool.entries.keys().map(|s| s.to_string()).collect();
+        kept.sort();
+        assert_eq!(kept, ["held", "reused"]);
+        let (stored, _) = pool.entries.get_key_value("held").unwrap();
+        assert!(Arc::ptr_eq(&held, stored));
+
+        // The reuse flag is reset by a prune, so an idle entry goes at the next one.
+        drop(held);
+        pool.prune();
+        assert!(pool.entries.is_empty());
+    }
+
+    /// A reuse flag set while an entry is still referenced doesn't outlive the next prune.
+    #[test]
+    fn intern_pool_prune_resets_flag_of_referenced_entries() {
+        let mut pool = InternPool::default();
+        let held = pool.intern("held");
+        let again = pool.intern("held");
+        drop(again);
+
+        pool.prune();
+        assert_eq!(pool.entries.len(), 1);
+
+        drop(held);
+        pool.prune();
+        assert!(pool.entries.is_empty());
+    }
+
+    /// Reaching the threshold prunes before inserting, then doubles the threshold.
+    #[test]
+    fn intern_pool_prunes_at_threshold() {
+        let mut pool = InternPool::default();
+        let held: Vec<_> = (0..MIN_PRUNE_AT / 2)
+            .map(|i| pool.intern(&format!("held{i}")))
+            .collect();
+        for i in 0..MIN_PRUNE_AT / 2 {
+            pool.intern(&format!("unused{i}"));
+        }
+        assert_eq!(pool.entries.len(), MIN_PRUNE_AT);
+
+        pool.intern("next");
+        assert_eq!(pool.entries.len(), held.len() + 1);
+        assert_eq!(pool.prune_at, MIN_PRUNE_AT);
+
+        // Entries still referenced survive, so the threshold grows with them.
+        let more: Vec<_> = (0..MIN_PRUNE_AT)
+            .map(|i| pool.intern(&format!("more{i}")))
+            .collect();
+        assert_eq!(pool.entries.len(), held.len() + more.len());
+        assert!(pool.prune_at > MIN_PRUNE_AT);
     }
 }

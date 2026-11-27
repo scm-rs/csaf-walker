@@ -59,17 +59,16 @@ impl Capping {
     ///
     /// This avoids allocating (or interning) messages which would be dropped by the cap.
     pub fn push_with(&mut self, id: Arc<str>, message: impl FnOnce() -> Arc<str>) {
-        self.total += 1;
-
         let (pushed, items) = self.items.entry(id.clone()).or_default();
-        *pushed += 1;
 
+        // Create the message before counting, so a panic doesn't leave a phantom omitted issue.
         if self.cap == 0 || items.len() < self.cap {
-            items.push(CheckError {
-                id,
-                message: message(),
-            });
+            let message = message();
+            items.push(CheckError { id, message });
         }
+
+        *pushed += 1;
+        self.total += 1;
     }
 }
 
@@ -196,8 +195,11 @@ impl InternPool {
     ///
     /// The threshold doubles with the remaining size, keeping pruning amortized constant per insert.
     fn prune(&mut self) {
-        self.entries
-            .retain(|s, hit| Arc::strong_count(s) > 1 || hit.take());
+        self.entries.retain(|s, hit| {
+            // Always reset the flag, also for entries kept because they are still referenced.
+            let reused = hit.take();
+            Arc::strong_count(s) > 1 || reused
+        });
         self.prune_at = MIN_PRUNE_AT.max(self.entries.len() * 2);
     }
 }
@@ -489,6 +491,22 @@ mod test {
         assert!(Arc::ptr_eq(&held, stored));
 
         // The reuse flag is reset by a prune, so an idle entry goes at the next one.
+        drop(held);
+        pool.prune();
+        assert!(pool.entries.is_empty());
+    }
+
+    /// A reuse flag set while an entry is still referenced doesn't outlive the next prune.
+    #[test]
+    fn intern_pool_prune_resets_flag_of_referenced_entries() {
+        let mut pool = InternPool::default();
+        let held = pool.intern("held");
+        let again = pool.intern("held");
+        drop(again);
+
+        pool.prune();
+        assert_eq!(pool.entries.len(), 1);
+
         drop(held);
         pool.prune();
         assert!(pool.entries.is_empty());
